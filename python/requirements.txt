@@ -1,0 +1,17 @@
+gymnasium==0.29.1
+stable-baselines3==2.3.0
+numpy>=1.23
+jupyter
+matplotlib
+torch>=2.0; platform_system != 'Darwin' or platform_machine != 'arm64'
+torch==2.4.0; platform_system == 'Darwin' and platform_machine == 'arm64'
+
+optuna>=3.6
+tensorboard>=2.14
+
+# Unity ML-Agents
+mlagents>=0.30.0
+mlagents-envs>=0.30.0
+
+
+

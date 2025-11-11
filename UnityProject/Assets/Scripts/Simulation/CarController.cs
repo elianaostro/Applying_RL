@@ -28,24 +28,24 @@ public class CarController : MonoBehaviour
     private const float MAX_CHECKPOINT_DELAY = 7;
 
     /// <summary>
-    /// The underlying AI agent of this car.
+    /// Current completion reward (tracked by TrackManager for ML-Agents).
     /// </summary>
-    public Agent Agent
+    public float CurrentCompletionReward
     {
         get;
         set;
     }
 
-    public float CurrentCompletionReward
-    {
-        get { return Agent.Genotype.Evaluation; }
-        set { Agent.Genotype.Evaluation = value; }
-    }
 
     /// <summary>
     /// Whether this car is controllable by user input (keyboard).
     /// </summary>
     public bool UseUserInput = false;
+
+    /// <summary>
+    /// The ML-Agents CarAgent component.
+    /// </summary>
+    private CarAgent carAgent;
 
     /// <summary>
     /// The movement component of this car.
@@ -84,6 +84,9 @@ public class CarController : MonoBehaviour
         Movement = GetComponent<CarMovement>();
         SpriteRenderer = GetComponent<SpriteRenderer>();
         sensors = GetComponentsInChildren<Sensor>();
+        
+        // Check if using ML-Agents
+        carAgent = GetComponent<CarAgent>();
     }
     void Start()
     {
@@ -106,7 +109,7 @@ public class CarController : MonoBehaviour
         foreach (Sensor s in sensors)
             s.Show();
 
-        Agent.Reset();
+        // ML-Agents handles episode reset in OnEpisodeBegin
         this.enabled = true;
     }
 
@@ -119,18 +122,8 @@ public class CarController : MonoBehaviour
     // Unity method for physics update
     void FixedUpdate()
     {
-        //Get control inputs from Agent
-        if (!UseUserInput)
-        {
-            //Get readings from sensors
-            double[] sensorOutput = new double[sensors.Length];
-            for (int i = 0; i < sensors.Length; i++)
-                sensorOutput[i] = sensors[i].Output;
-
-            double[] controlInputs = Agent.FNN.ProcessInputs(sensorOutput);
-            Movement.SetInputs(controlInputs);
-        }
-
+        // ML-Agents handles control in CarAgent.OnActionReceived
+        // Just check for timeout
         if (timeSinceLastCheckpoint > MAX_CHECKPOINT_DELAY)
         {
             Die();
@@ -147,12 +140,22 @@ public class CarController : MonoBehaviour
         foreach (Sensor s in sensors)
             s.Hide();
 
-        Agent.Kill();
+        // ML-Agents will handle episode end
+        if (carAgent != null)
+        {
+            carAgent.OnWallHit();
+        }
     }
 
     public void CheckpointCaptured()
     {
         timeSinceLastCheckpoint = 0;
+        
+        // Notify ML-Agents agent
+        if (carAgent != null)
+        {
+            carAgent.OnCheckpointCaptured();
+        }
     }
     #endregion
 }

@@ -1,0 +1,199 @@
+#region Includes
+using UnityEngine;
+using Unity.MLAgents;
+using Unity.MLAgents.Sensors;
+using Unity.MLAgents.Actuators;
+#endregion
+
+public class CarAgent : Unity.MLAgents.Agent
+{
+    #region Members
+    
+    [Header("Car Components")]
+    [SerializeField]
+    private CarController carController;
+    
+    [SerializeField]
+    private CarMovement carMovement;
+    
+    private Sensor[] sensors;
+    
+    [Header("Reward Settings")]
+    [SerializeField]
+    private float checkpointReward = 1.0f;
+    
+    [SerializeField]
+    private float wallHitPenalty = -10.0f;
+    
+    [SerializeField]
+    private float timeoutPenalty = -5.0f;
+    
+    [SerializeField]
+    private float progressRewardMultiplier = 0.1f;
+    
+    [Header("Track Settings")]
+    [SerializeField]
+    private TrackManager trackManager;
+    
+    private float previousCompletion = 0f;
+    private float timeSinceLastCheckpoint = 0f;
+    private const float MAX_CHECKPOINT_DELAY = 7f;
+    private uint currentCheckpointIndex = 1;
+    
+    void Update()
+    {
+        if (trackManager != null && carController != null)
+        {
+            float currentCompletion = carController.CurrentCompletionReward;
+            if (currentCompletion > previousCompletion)
+            {
+                float progressReward = (currentCompletion - previousCompletion) * progressRewardMultiplier;
+                AddReward(progressReward);
+                previousCompletion = currentCompletion;
+            }
+        }
+    }
+    
+    #endregion
+    
+    #region Unity Methods
+    
+    public override void Initialize()
+    {
+        base.Initialize();
+        
+        if (carController == null)
+            carController = GetComponent<CarController>();
+        
+        if (carMovement == null)
+            carMovement = GetComponent<CarMovement>();
+        
+        if (trackManager == null)
+            trackManager = FindObjectOfType<TrackManager>();
+        
+        sensors = GetComponentsInChildren<Sensor>();
+        
+        if (carController != null)
+        {
+            carController.UseUserInput = false;
+        }
+    }
+    
+    public override void OnEpisodeBegin()
+    {
+        base.OnEpisodeBegin();
+        
+        if (carController != null)
+        {
+            if (trackManager != null && trackManager.PrototypeCar != null)
+            {
+                carController.transform.position = trackManager.PrototypeCar.transform.position;
+                carController.transform.rotation = trackManager.PrototypeCar.transform.rotation;
+            }
+            else
+            {
+                carController.transform.position = Vector3.zero;
+                carController.transform.rotation = Quaternion.identity;
+            }
+            
+            if (carMovement != null)
+            {
+                carMovement.enabled = true;
+                carMovement.Stop();
+                carMovement.SetInputs(new double[] { 0, 0 });
+            }
+            
+            if (sensors != null)
+            {
+                foreach (Sensor s in sensors)
+                    s.Show();
+            }
+        }
+        
+        previousCompletion = 0f;
+        timeSinceLastCheckpoint = 0f;
+        currentCheckpointIndex = 1;
+    }
+    
+    #endregion
+    
+    #region ML-Agents Methods
+    
+    public override void CollectObservations(VectorSensor sensor)
+    {
+        if (sensors != null)
+        {
+            foreach (Sensor s in sensors)
+            {
+                float normalizedOutput = Mathf.Clamp01(s.Output / 10f);
+                sensor.AddObservation(normalizedOutput);
+            }
+        }
+        else
+        {
+            for (int i = 0; i < 5; i++)
+                sensor.AddObservation(0f);
+        }
+        
+        if (carMovement != null)
+        {
+            float normalizedVelocity = Mathf.Clamp(carMovement.Velocity / 20f, -1f, 1f);
+            sensor.AddObservation(normalizedVelocity);
+        }
+        else
+        {
+            sensor.AddObservation(0f);
+        }
+    }
+    
+    public override void OnActionReceived(ActionBuffers actions)
+    {
+        float turn = Mathf.Clamp(actions.ContinuousActions[0], -1f, 1f);
+        float throttle = Mathf.Clamp(actions.ContinuousActions[1], -1f, 1f);
+        
+        if (carMovement != null)
+        {
+            carMovement.SetInputs(new double[] { turn, throttle });
+        }
+        
+        timeSinceLastCheckpoint += Time.fixedDeltaTime;
+        if (timeSinceLastCheckpoint > MAX_CHECKPOINT_DELAY)
+        {
+            AddReward(timeoutPenalty);
+            EndEpisode();
+        }
+    }
+    
+    public override void Heuristic(in ActionBuffers actionsOut)
+    {
+        var continuousActionsOut = actionsOut.ContinuousActions;
+        continuousActionsOut[0] = Input.GetAxis("Horizontal");
+        continuousActionsOut[1] = Input.GetAxis("Vertical");
+    }
+    
+    #endregion
+    
+    #region Reward Methods
+    
+    public void OnWallHit()
+    {
+        AddReward(wallHitPenalty);
+        EndEpisode();
+    }
+    
+    public void OnCheckpointCaptured()
+    {
+        AddReward(checkpointReward);
+        timeSinceLastCheckpoint = 0f;
+        currentCheckpointIndex++;
+    }
+    
+    public void OnTrackCompleted()
+    {
+        AddReward(100f);
+        EndEpisode();
+    }
+    
+    #endregion
+}
+
