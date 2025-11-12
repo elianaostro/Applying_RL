@@ -40,10 +40,6 @@ public class UISimulationController : MonoBehaviour
     #endregion
 
     #region Constructors
-    void Awake()
-    {
-
-    }
     #endregion
 
     #region Methods

@@ -1,0 +1,8 @@
+gymnasium==0.29.1
+numpy>=1.23
+jupyter
+matplotlib
+torch>=2.0
+
+# optuna>=3.6
+tensorboard>=2.14
