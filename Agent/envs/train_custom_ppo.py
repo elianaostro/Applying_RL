@@ -73,6 +73,20 @@ def parse_args():
         help="Seed para reproducibilidad (default: 1)"
     )
     
+    parser.add_argument(
+        "--base-port",
+        type=int,
+        default=5004,
+        help="Puerto base para comunicación con Unity (default: 5004)"
+    )
+    
+    parser.add_argument(
+        "--worker-id",
+        type=int,
+        default=0,
+        help="ID del worker (default: 0). Usa un número diferente si el puerto está ocupado"
+    )
+    
     return parser.parse_args()
 
 
@@ -88,6 +102,8 @@ def main():
     print(f"  Max Steps: {args.max_steps}")
     print(f"  Time Scale: {args.time_scale}")
     print(f"  Save Dir: {args.save_dir}")
+    print(f"  Base Port: {args.base_port}")
+    print(f"  Worker ID: {args.worker_id}")
     print()
     
     # 1. Configuración de conexión con Unity
@@ -99,8 +115,8 @@ def main():
             file_name=args.env,
             seed=args.seed,
             side_channels=[engine_channel],
-            worker_id=0,
-            base_port=5004
+            worker_id=args.worker_id,
+            base_port=args.base_port
         )
         
         # Acelerar la simulación en Unity
@@ -153,8 +169,9 @@ def main():
         episode_count = 0
         episode_rewards = []
         
-        # Diccionario para trackear episodios por agente
-        agent_episodes = {}  # {agent_id: {'obs': obs, 'action': action, 'logp': logp, 'val': val, 'reward': reward}}
+        # Diccionario para guardar transiciones pendientes (obs, action, logp, val)
+        # Se guardan aquí antes de obtener el reward del siguiente paso
+        pending_transitions = {}  # {agent_id: {'obs': obs, 'action': action, 'logp': logp, 'val': val}}
         
         print("=" * 70)
         print("Iniciando entrenamiento...")
@@ -164,119 +181,138 @@ def main():
         print()
         
         while total_steps < args.max_steps:
-            # Obtener observaciones actuales
+            # 1. Obtener datos de TODOS los agentes
             decision_steps, terminal_steps = env.get_steps(behavior_name)
             
-            # Manejar agentes que terminaron (episodio terminado)
+            # 2. Procesar agentes que terminaron (Terminal Steps)
+            # Aquí recibimos el reward final y guardamos la transición con done=True
             for agent_id in terminal_steps.agent_id:
-                # CORRECCIÓN: Usar terminal_steps[agent_id] para acceder al paso del agente
                 term_step = terminal_steps[agent_id]
                 final_reward = term_step.reward
                 
-                # Si tenemos datos del episodio, actualizar la última entrada
-                if agent_id in agent_episodes:
-                    episode_data = agent_episodes[agent_id]
-                    
-                    # La última entrada ya está en el buffer, solo necesitamos agregar la recompensa final
-                    # y marcar como done. Como el buffer ya tiene la entrada, agregamos una entrada
-                    # final con la recompensa acumulada
+                # Si tenemos una transición pendiente, guardarla con el reward final
+                if agent_id in pending_transitions:
+                    trans = pending_transitions[agent_id]
                     agent.buffer.add(
-                        obs=episode_data['obs'],
-                        act=episode_data['action'],
-                        logp=episode_data['logp'],
-                        rew=episode_data['reward'] + final_reward,
+                        obs=trans['obs'],
+                        act=trans['action'],
+                        logp=trans['logp'],
+                        rew=final_reward,
                         done=True,
-                        val=episode_data['val']
+                        val=trans['val']
                     )
                     
-                    episode_rewards.append(episode_data['reward'] + final_reward)
+                    episode_rewards.append(final_reward)
                     episode_count += 1
+                    total_steps += 1
                     
-                    # Limpiar tracking del episodio
-                    del agent_episodes[agent_id]
+                    # Limpiar transición pendiente
+                    del pending_transitions[agent_id]
                     
                     if episode_count % 10 == 0:
                         avg_reward = np.mean(episode_rewards[-10:])
                         print(f"Episodio {episode_count}, Recompensa promedio: {avg_reward:.2f}, Pasos: {total_steps}")
             
-            # Manejar agentes activos (tomar decisiones)
+            # 3. Procesar agentes activos que necesitan actuar (Decision Steps)
             if len(decision_steps) > 0:
-                # Por simplicidad, trabajamos con el primer agente activo
-                agent_id = decision_steps.agent_id[0]
+                # Preparamos lista para juntar las acciones de todos los agentes
+                actions_list = []
                 
-                # CORRECCIÓN: Usar decision_steps[agent_id] para acceder al paso del agente
-                decision_step = decision_steps[agent_id]
-                obs = decision_step.obs[0]  # Primera observación del agente
-                
-                # Convertir observación a tensor
-                obs_tensor = torch.tensor(obs, dtype=torch.float32)
-                
-                # Tu PPO selecciona acción
-                action, logp, val = agent.select_action(obs_tensor)
-                
-                # Obtener recompensa del paso actual
-                step_reward = decision_step.reward
-                
-                # Guardar en buffer
-                agent.buffer.add(
-                    obs=obs,
-                    act=action.numpy(),
-                    logp=logp,
-                    rew=step_reward,
-                    done=False,
-                    val=val
-                )
-                
-                # Guardar datos del episodio para cuando termine
-                agent_episodes[agent_id] = {
-                    'obs': obs,
-                    'action': action.numpy(),
-                    'logp': logp,
-                    'val': val,
-                    'reward': step_reward
-                }
-                
-                # Convertir acción a formato Unity
-                action_np = action.numpy().reshape(1, -1)  # Shape (1, act_dim)
-                action_tuple = ActionTuple(continuous=action_np)
-                
-                # Enviar acción a Unity
-                env.set_actions(behavior_name, action_tuple)
-                
-                total_steps += 1
-                
-                # Actualizar cuando el buffer esté lleno
-                if agent.buffer.is_full():
-                    # Obtener el último valor para GAE
-                    # Usar el valor actual del agente activo
-                    last_obs_tensor = obs_tensor.to(device).unsqueeze(0)
-                    last_value = agent.value(last_obs_tensor).squeeze(-1).item()
+                # Iteramos por cada agente que pide acción
+                for agent_id in decision_steps.agent_id:
+                    # Obtener la obs de ESTE agente específico
+                    decision_step = decision_steps[agent_id]
+                    obs = decision_step.obs[0]
                     
-                    # Calcular GAE y obtener batch
-                    batch = agent.buffer.get(
-                        last_value=last_value,
-                        gamma=config.gamma,
-                        lam=config.gae_lambda
+                    # Convertir a tensor
+                    obs_tensor = torch.tensor(obs, dtype=torch.float32)
+                    
+                    # Tu PPO selecciona acción (devuelve acción para 1 solo agente)
+                    action, logp, val = agent.select_action(obs_tensor)
+                    
+                    # Guardar transición pendiente (obs, action, logp, val)
+                    # El reward lo obtendremos en el siguiente paso
+                    pending_transitions[agent_id] = {
+                        'obs': obs,
+                        'action': action.numpy(),
+                        'logp': logp,
+                        'val': val
+                    }
+                    
+                    # Agregar acción a la lista
+                    actions_list.append(action.numpy())
+                
+                # Enviar TODAS las acciones a Unity de una vez
+                if actions_list:
+                    actions_np = np.vstack(actions_list)  # Shape (NumAgents, act_dim)
+                    action_tuple = ActionTuple(continuous=actions_np)
+                    
+                    # ML-Agents empareja las acciones con los agent_id de decision_steps en orden
+                    env.set_actions(behavior_name, action_tuple)
+            
+            # 4. Avanzar simulación
+            env.step()
+            
+            # 5. Obtener rewards del paso siguiente y guardar transiciones completas
+            decision_steps_next, terminal_steps_next = env.get_steps(behavior_name)
+            
+            # Procesar agentes que siguen activos (obtener sus rewards)
+            for agent_id in decision_steps_next.agent_id:
+                if agent_id in pending_transitions:
+                    decision_step_next = decision_steps_next[agent_id]
+                    step_reward = decision_step_next.reward
+                    
+                    # Ahora tenemos todo: obs, action, logp, reward, val, done=False
+                    trans = pending_transitions[agent_id]
+                    agent.buffer.add(
+                        obs=trans['obs'],
+                        act=trans['action'],
+                        logp=trans['logp'],
+                        rew=step_reward,
+                        done=False,
+                        val=trans['val']
                     )
                     
-                    # Actualizar el agente
-                    metrics = agent.update(batch)
+                    total_steps += 1
                     
-                    print(f"Update en paso {total_steps}:")
-                    print(f"  Policy Loss: {metrics['loss_policy']:.4f}")
-                    print(f"  Value Loss: {metrics['loss_value']:.4f}")
-                    print(f"  Entropy: {metrics['entropy']:.4f}")
-                    print()
-                    
-                    # Guardar modelo periódicamente
-                    if total_steps % args.save_freq == 0:
-                        save_path = Path(args.save_dir) / f"ppo_step_{total_steps}.pt"
-                        agent.save(str(save_path))
-                        print(f"Modelo guardado en: {save_path}")
-                        print()
+                    # Limpiar transición pendiente (ya guardada)
+                    del pending_transitions[agent_id]
             
-            # Avanzar simulación
-            env.step()
+            # 6. Actualizar cuando el buffer esté lleno
+            if agent.buffer.is_full():
+                # Obtener el último valor para GAE
+                # Usar el valor de los agentes activos actuales
+                if len(decision_steps_next) > 0:
+                    # Usar el primer agente activo para obtener el último valor
+                    last_agent_id = decision_steps_next.agent_id[0]
+                    last_obs = decision_steps_next[last_agent_id].obs[0]
+                    last_obs_tensor = torch.tensor(last_obs, dtype=torch.float32).to(device).unsqueeze(0)
+                    last_value = agent.value(last_obs_tensor).squeeze(-1).item()
+                else:
+                    last_value = 0.0
+                
+                # Calcular GAE y obtener batch
+                batch = agent.buffer.get(
+                    last_value=last_value,
+                    gamma=config.gamma,
+                    lam=config.gae_lambda
+                )
+                
+                # Actualizar el agente
+                metrics = agent.update(batch)
+                
+                print(f"Update en paso {total_steps}:")
+                print(f"  Policy Loss: {metrics['loss_policy']:.4f}")
+                print(f"  Value Loss: {metrics['loss_value']:.4f}")
+                print(f"  Entropy: {metrics['entropy']:.4f}")
+                print()
+                
+                # Guardar modelo periódicamente
+                if total_steps % args.save_freq == 0:
+                    save_path = Path(args.save_dir) / f"ppo_step_{total_steps}.pt"
+                    agent.save(str(save_path))
+                    print(f"Modelo guardado en: {save_path}")
+                    print()
         
         # Guardar modelo final
         save_path = Path(args.save_dir) / "ppo_final.pt"
@@ -290,9 +326,28 @@ def main():
             agent.save(str(save_path))
             print(f"Modelo guardado en: {save_path}")
     except Exception as e:
-        print(f"\n✗ Error durante el entrenamiento: {e}")
-        import traceback
-        traceback.print_exc()
+        error_msg = str(e)
+        
+        # Detectar error de puerto ocupado
+        if "worker number" in error_msg and "still in use" in error_msg:
+            print("\n" + "=" * 70)
+            print("✗ Error: Puerto ocupado")
+            print("=" * 70)
+            print()
+            print("El puerto está siendo usado por otra instancia.")
+            print()
+            print("Soluciones:")
+            print("  1. Cierra cualquier instancia anterior del script")
+            print("  2. Cierra Unity Editor y vuelve a abrirlo")
+            print("  3. Usa un puerto diferente:")
+            print(f"     ./train_custom_ppo.sh --base-port 5005")
+            print("  4. O usa un worker_id diferente:")
+            print(f"     ./train_custom_ppo.sh --worker-id 1")
+            print()
+        else:
+            print(f"\n✗ Error durante el entrenamiento: {e}")
+            import traceback
+            traceback.print_exc()
     finally:
         if 'env' in locals():
             env.close()
