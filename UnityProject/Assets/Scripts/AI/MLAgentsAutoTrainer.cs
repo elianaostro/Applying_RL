@@ -23,7 +23,7 @@ public class MLAgentsAutoTrainer : MonoBehaviour
     private string pythonPath = "python";
     
     [SerializeField]
-    private string trainingScriptPath = "../python/train_car_mlagents.py";
+    private string trainingScriptPath = "../Agent/envs/train_car_mlagents.py";
     
     private Process trainingProcess;
     private bool trainingStarted = false;
@@ -63,7 +63,8 @@ public class MLAgentsAutoTrainer : MonoBehaviour
         }
         
         string projectRoot = Application.dataPath.Replace("/Assets", "");
-        string scriptPath = Path.Combine(projectRoot, trainingScriptPath.Replace("../", ""));
+        // Resolve relative path properly (go up from UnityProject to workspace root)
+        string scriptPath = Path.GetFullPath(Path.Combine(projectRoot, trainingScriptPath));
         
         if (!File.Exists(scriptPath))
         {
@@ -74,12 +75,31 @@ public class MLAgentsAutoTrainer : MonoBehaviour
         
         string pythonDir = Path.GetDirectoryName(scriptPath);
         
+        // Build arguments for the Python script
+        string arguments = $"\"{scriptPath}\"";
+        
+        // Add config path if specified
+        if (!string.IsNullOrEmpty(configPath))
+        {
+            string fullConfigPath = Path.GetFullPath(Path.Combine(projectRoot, "../Agent", configPath));
+            if (File.Exists(fullConfigPath))
+            {
+                arguments += $" --config \"{fullConfigPath}\"";
+            }
+        }
+        
+        // Add run ID if specified
+        if (!string.IsNullOrEmpty(runId))
+        {
+            arguments += $" --run-id \"{runId}\"";
+        }
+        
         try
         {
             ProcessStartInfo startInfo = new ProcessStartInfo
             {
                 FileName = pythonPath,
-                Arguments = $"\"{scriptPath}\"",
+                Arguments = arguments,
                 WorkingDirectory = pythonDir,
                 UseShellExecute = false,
                 RedirectStandardOutput = true,

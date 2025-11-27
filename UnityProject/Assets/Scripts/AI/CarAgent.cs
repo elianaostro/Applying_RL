@@ -69,7 +69,7 @@ public class CarAgent : Unity.MLAgents.Agent
             carMovement = GetComponent<CarMovement>();
         
         if (trackManager == null)
-            trackManager = FindObjectOfType<TrackManager>();
+            trackManager = FindFirstObjectByType<TrackManager>();
         
         sensors = GetComponentsInChildren<Sensor>();
         
