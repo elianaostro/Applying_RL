@@ -15,6 +15,8 @@ import argparse
 import numpy as np
 import torch
 from pathlib import Path
+from datetime import datetime
+from torch.utils.tensorboard import SummaryWriter
 from mlagents_envs.environment import UnityEnvironment
 from mlagents_envs.base_env import ActionTuple
 from mlagents_envs.side_channel.engine_configuration_channel import EngineConfigurationChannel
@@ -87,6 +89,13 @@ def parse_args():
         help="ID del worker (default: 0). Usa un número diferente si el puerto está ocupado"
     )
     
+    parser.add_argument(
+        "--tensorboard-dir",
+        type=str,
+        default=None,
+        help="Directorio para logs de TensorBoard (default: {save_dir}/tensorboard)"
+    )
+    
     return parser.parse_args()
 
 
@@ -97,11 +106,27 @@ def main():
     print("Entrenamiento con PPO Personalizado")
     print("=" * 70)
     print()
+    # Crear directorios necesarios
+    save_dir = Path(args.save_dir)
+    save_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Configurar TensorBoard
+    if args.tensorboard_dir is None:
+        tensorboard_dir = save_dir / "tensorboard"
+    else:
+        tensorboard_dir = Path(args.tensorboard_dir)
+    
+    # Crear un subdirectorio con timestamp para esta ejecución
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    run_dir = tensorboard_dir / f"run_{timestamp}"
+    writer = SummaryWriter(log_dir=str(run_dir))
+    
     print("Configuración:")
     print(f"  Env: {args.env if args.env else 'Unity Editor'}")
     print(f"  Max Steps: {args.max_steps}")
     print(f"  Time Scale: {args.time_scale}")
     print(f"  Save Dir: {args.save_dir}")
+    print(f"  TensorBoard Dir: {run_dir}")
     print(f"  Base Port: {args.base_port}")
     print(f"  Worker ID: {args.worker_id}")
     print()
@@ -206,12 +231,17 @@ def main():
                     episode_count += 1
                     total_steps += 1
                     
+                    # Registrar reward en TensorBoard
+                    writer.add_scalar("Reward/Episode_Reward", final_reward, episode_count)
+                    
                     # Limpiar transición pendiente
                     del pending_transitions[agent_id]
                     
                     if episode_count % 10 == 0:
                         avg_reward = np.mean(episode_rewards[-10:])
                         print(f"Episodio {episode_count}, Recompensa promedio: {avg_reward:.2f}, Pasos: {total_steps}")
+                        # Registrar promedio de rewards
+                        writer.add_scalar("Reward/Average_Reward_10", avg_reward, episode_count)
             
             # 3. Procesar agentes activos que necesitan actuar (Decision Steps)
             if len(decision_steps) > 0:
@@ -301,6 +331,18 @@ def main():
                 # Actualizar el agente
                 metrics = agent.update(batch)
                 
+                # Registrar métricas en TensorBoard
+                writer.add_scalar("Loss/Policy_Loss", metrics['loss_policy'], total_steps)
+                writer.add_scalar("Loss/Value_Loss", metrics['loss_value'], total_steps)
+                writer.add_scalar("Loss/Total_Loss", metrics.get('loss_total', metrics['loss_policy'] + metrics['loss_value']), total_steps)
+                writer.add_scalar("Metrics/Entropy", metrics['entropy'], total_steps)
+                
+                # Registrar también por update number
+                update_number = total_steps // config.n_steps
+                writer.add_scalar("Loss/Policy_Loss_Update", metrics['loss_policy'], update_number)
+                writer.add_scalar("Loss/Value_Loss_Update", metrics['loss_value'], update_number)
+                writer.add_scalar("Metrics/Entropy_Update", metrics['entropy'], update_number)
+                
                 print(f"Update en paso {total_steps}:")
                 print(f"  Policy Loss: {metrics['loss_policy']:.4f}")
                 print(f"  Value Loss: {metrics['loss_value']:.4f}")
@@ -309,22 +351,31 @@ def main():
                 
                 # Guardar modelo periódicamente
                 if total_steps % args.save_freq == 0:
-                    save_path = Path(args.save_dir) / f"ppo_step_{total_steps}.pt"
+                    save_path = save_dir / f"ppo_step_{total_steps}.pt"
                     agent.save(str(save_path))
                     print(f"Modelo guardado en: {save_path}")
                     print()
         
         # Guardar modelo final
-        save_path = Path(args.save_dir) / "ppo_final.pt"
+        save_path = save_dir / "ppo_final.pt"
         agent.save(str(save_path))
         print(f"Modelo final guardado en: {save_path}")
+        
+        # Cerrar TensorBoard writer
+        writer.close()
+        print(f"Logs de TensorBoard guardados en: {run_dir}")
+        print(f"\nPara visualizar los resultados, ejecuta:")
+        print(f"  tensorboard --logdir {tensorboard_dir}")
         
     except KeyboardInterrupt:
         print("\n\nEntrenamiento interrumpido por el usuario.")
         if 'agent' in locals():
-            save_path = Path(args.save_dir) / "ppo_interrupted.pt"
+            save_path = save_dir / "ppo_interrupted.pt"
             agent.save(str(save_path))
             print(f"Modelo guardado en: {save_path}")
+        if 'writer' in locals():
+            writer.close()
+            print(f"Logs de TensorBoard guardados en: {run_dir}")
     except Exception as e:
         error_msg = str(e)
         
@@ -352,6 +403,8 @@ def main():
         if 'env' in locals():
             env.close()
             print("Entorno cerrado.")
+        if 'writer' in locals():
+            writer.close()
 
 
 if __name__ == "__main__":

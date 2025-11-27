@@ -11,4 +11,8 @@ dependencies = [
     "numpy>=1.21.0",
     "torch>=1.11.0",
     "six",
+    "tensorboard",
+    "gymnasium[box2d]>=1.2.2",
+    "pygame>=2.6.1",
+    "swig>=4.4.0",
 ]
