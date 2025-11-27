@@ -37,7 +37,13 @@ def parse_args():
         "--env",
         type=str,
         default=None,
-        help="Ruta al ejecutable de Unity (opcional, por defecto usa Unity Editor)"
+        help="Ruta al ejecutable de Unity (opcional). Por defecto usa el build de Linux en ../Build/RunCar.x86_64. Usa 'editor' para usar Unity Editor."
+    )
+    
+    parser.add_argument(
+        "--no-graphics",
+        action="store_true",
+        help="Ejecutar Unity en modo headless (sin ventana gráfica). Más rápido pero no puedes ver la simulación."
     )
     
     parser.add_argument(
@@ -121,8 +127,91 @@ def main():
     run_dir = tensorboard_dir / f"run_{timestamp}"
     writer = SummaryWriter(log_dir=str(run_dir))
     
+    # Procesar ruta del ejecutable de Unity
+    unity_env_path = None
+    
+    # Si no se especifica --env, usar el build de Linux por defecto
+    if args.env is None:
+        # Buscar el build de Linux por defecto
+        script_dir = Path(__file__).parent.parent
+        default_build = script_dir.parent / "Build" / "RunCar.x86_64"
+        if default_build.exists():
+            unity_env_path = str(default_build.resolve())
+            print(f"Usando build de Linux por defecto: {unity_env_path}")
+        else:
+            print("⚠ Build de Linux no encontrado. Usando Unity Editor.")
+            print(f"  Buscado en: {default_build}")
+            print("  Para usar Unity Editor, presiona Play cuando se indique.")
+    elif args.env.lower() == "editor":
+        # Usuario quiere usar Unity Editor explícitamente
+        unity_env_path = None
+        print("Usando Unity Editor. Asegúrate de presionar Play cuando se indique.")
+    elif args.env:
+        # Convertir ruta relativa a absoluta y expandir ~
+        env_path = Path(args.env).expanduser()
+        if not env_path.is_absolute():
+            # Si es relativa, resolverla desde el directorio del script
+            script_dir = Path(__file__).parent.parent
+            env_path = (script_dir / env_path).resolve()
+        else:
+            env_path = env_path.resolve()
+        
+        # Verificar que el archivo existe
+        if not env_path.exists():
+            print(f"\n✗ Error: El ejecutable no existe en: {env_path}")
+            print(f"  Ruta proporcionada: {args.env}")
+            print(f"  Ruta resuelta: {env_path}")
+            print("\nVerifica que:")
+            print("  1. La ruta al ejecutable sea correcta")
+            print("  2. El ejecutable exista en esa ubicación")
+            print("  3. Si usas rutas relativas, asegúrate de estar en el directorio correcto")
+            return
+        
+        # Verificar permisos de ejecución (solo en Linux/Mac)
+        if hasattr(os, 'access') and os.name != 'nt':
+            if not os.access(env_path, os.X_OK):
+                print(f"\n⚠ Advertencia: El archivo no tiene permisos de ejecución")
+                print(f"  Intentando agregar permisos...")
+                try:
+                    os.chmod(env_path, 0o755)
+                    print(f"  ✓ Permisos agregados")
+                except Exception as e:
+                    print(f"  ✗ No se pudieron agregar permisos: {e}")
+            
+            # Verificar si es un ejecutable de Windows en Linux
+            try:
+                import subprocess
+                result = subprocess.run(['file', str(env_path)], 
+                                      capture_output=True, text=True, timeout=2)
+                if 'PE32' in result.stdout or 'Windows' in result.stdout:
+                    print("\n" + "=" * 70)
+                    print("⚠ ADVERTENCIA: Ejecutable de Windows detectado")
+                    print("=" * 70)
+                    print()
+                    print("El archivo es un ejecutable de Windows (.exe) y estás en Linux.")
+                    print("ML-Agents no puede ejecutar ejecutables de Windows directamente en Linux.")
+                    print()
+                    print("Opciones:")
+                    print("  1. Usa Unity Editor (recomendado):")
+                    print("     ./train_custom_ppo.sh")
+                    print("     (Luego presiona Play en Unity Editor)")
+                    print()
+                    print("  2. Crea un build de Linux del juego en Unity:")
+                    print("     File > Build Settings > Linux > Build")
+                    print()
+                    print("  3. Usa Wine (no recomendado, puede tener problemas):")
+                    print("     wine \"{}\"".format(env_path))
+                    print()
+                    print("Continuando de todas formas, pero probablemente fallará...")
+                    print()
+            except (subprocess.TimeoutExpired, FileNotFoundError, Exception):
+                # Si 'file' no está disponible o falla, continuar
+                pass
+        
+        unity_env_path = str(env_path)
+    
     print("Configuración:")
-    print(f"  Env: {args.env if args.env else 'Unity Editor'}")
+    print(f"  Env: {unity_env_path if unity_env_path else 'Unity Editor'}")
     print(f"  Max Steps: {args.max_steps}")
     print(f"  Time Scale: {args.time_scale}")
     print(f"  Save Dir: {args.save_dir}")
@@ -137,17 +226,24 @@ def main():
     
     try:
         env = UnityEnvironment(
-            file_name=args.env,
+            file_name=unity_env_path,
             seed=args.seed,
             side_channels=[engine_channel],
             worker_id=args.worker_id,
             base_port=args.base_port
         )
         
-        # Acelerar la simulación en Unity
+        # Configurar Unity (resolución y time scale)
+        # Si --no-graphics está activado, usar resolución mínima
+        if args.no_graphics:
+            width, height = 84, 84  # Resolución mínima para headless
+            print("Modo headless activado (sin ventana gráfica)")
+        else:
+            width, height = 800, 600
+        
         engine_channel.set_configuration_parameters(
-            width=800,
-            height=600,
+            width=width,
+            height=height,
             time_scale=args.time_scale
         )
         
@@ -202,7 +298,12 @@ def main():
         print("Iniciando entrenamiento...")
         print("=" * 70)
         print()
-        print("NOTA: Asegúrate de que Unity esté en Play mode")
+        if unity_env_path is None:
+            print("NOTA: Asegúrate de que Unity Editor esté en Play mode")
+        else:
+            print(f"NOTA: El build de Unity se ejecutará automáticamente")
+            if not args.no_graphics:
+                print("      Puedes ver la simulación en la ventana de Unity")
         print()
         
         while total_steps < args.max_steps:
@@ -377,10 +478,39 @@ def main():
             writer.close()
             print(f"Logs de TensorBoard guardados en: {run_dir}")
     except Exception as e:
-        error_msg = str(e)
+        error_msg = str(e).lower()
         
+        # Detectar error de ejecutable no encontrado
+        if "couldn't launch" in error_msg or "does not match any environments" in error_msg or "provided filename" in error_msg:
+            print("\n" + "=" * 70)
+            print("✗ Error: No se pudo lanzar el ejecutable de Unity")
+            print("=" * 70)
+            print()
+            if unity_env_path:
+                print(f"Ruta proporcionada: {args.env}")
+                print(f"Ruta resuelta: {unity_env_path}")
+                print()
+                print("Posibles causas:")
+                print("  1. El ejecutable no existe en la ruta especificada")
+                print("  2. El ejecutable no tiene permisos de ejecución")
+                print("  3. La ruta contiene caracteres especiales o espacios mal manejados")
+                print("  4. El ejecutable está corrupto o incompleto")
+                print()
+                print("Soluciones:")
+                print("  1. Verifica que el archivo existe:")
+                print(f"     ls -la \"{unity_env_path}\"")
+                print("  2. Si el archivo existe, verifica permisos:")
+                print(f"     chmod +x \"{unity_env_path}\"")
+                print("  3. Usa una ruta absoluta:")
+                print(f"     ./train_custom_ppo.sh --env \"{unity_env_path}\"")
+                print("  4. O usa Unity Editor en lugar del build:")
+                print("     ./train_custom_ppo.sh")
+            else:
+                print("No se proporcionó ruta al ejecutable.")
+                print("Asegúrate de que Unity Editor esté en Play mode.")
+            print()
         # Detectar error de puerto ocupado
-        if "worker number" in error_msg and "still in use" in error_msg:
+        elif "worker number" in error_msg and "still in use" in error_msg:
             print("\n" + "=" * 70)
             print("✗ Error: Puerto ocupado")
             print("=" * 70)

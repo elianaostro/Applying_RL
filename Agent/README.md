@@ -65,18 +65,34 @@ Este proyecto usa **tu implementación de PPO** (`PPO/ppo.py`) para entrenar el 
 
 #### Uso:
 
-**Opción A: Con Unity Editor (desarrollo)**
+**Opción A: Con Build de Linux (por defecto, recomendado)**
 ```bash
 cd Agent
-./train_custom_ppo.sh
+./train_custom_ppo.sh --time-scale 50.0
+```
+
+El script usa automáticamente el build de Linux (`../Build/RunCar.x86_64`). Puedes ver la simulación en tiempo real.
+
+**Opción B: Modo headless (sin ventana, más rápido)**
+```bash
+cd Agent
+./train_custom_ppo.sh --no-graphics --time-scale 50.0
+```
+
+Útil para entrenamientos largos donde no necesitas ver la simulación.
+
+**Opción C: Con Unity Editor (desarrollo)**
+```bash
+cd Agent
+./train_custom_ppo.sh --env editor
 ```
 
 Luego, cuando el script indique, **presiona Play en Unity Editor**.
 
-**Opción B: Con Build de Unity (entrenamiento largo)**
+**Opción D: Especificar build personalizado**
 ```bash
 cd Agent
-./train_custom_ppo.sh --env ../Build/Applying\ EANNs.exe --time-scale 50.0
+./train_custom_ppo.sh --env /ruta/a/tu/build.x86_64 --time-scale 50.0
 ```
 
 #### Opciones disponibles:
@@ -85,6 +101,9 @@ cd Agent
 
 Opciones:
   --env PATH          Ruta al ejecutable de Unity (opcional)
+                       - Por defecto: usa ../Build/RunCar.x86_64
+                       - Usa 'editor' para Unity Editor
+  --no-graphics       Ejecutar en modo headless (sin ventana, más rápido)
   --max-steps N       Número máximo de pasos (default: 5000000)
   --time-scale F      Time scale de Unity (default: 20.0)
   --save-dir PATH     Directorio para guardar modelos (default: results/custom_ppo)
