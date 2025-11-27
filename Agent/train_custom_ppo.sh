@@ -1,5 +1,5 @@
 #!/bin/bash
-# Script para entrenar el agente CarAgent con ML-Agents
+# Script para entrenar con tu implementación personalizada de PPO
 
 # Colores para output
 GREEN='\033[0;32m'
@@ -9,10 +9,9 @@ NC='\033[0m' # No Color
 
 # Directorio del script
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 echo -e "${GREEN}========================================${NC}"
-echo -e "${GREEN}Entrenamiento CarAgent con ML-Agents${NC}"
+echo -e "${GREEN}Entrenamiento con PPO Personalizado${NC}"
 echo -e "${GREEN}========================================${NC}"
 echo ""
 
@@ -38,6 +37,6 @@ if [ ! -d ".venv" ]; then
 fi
 
 # Ejecutar el script de entrenamiento con uv
-echo -e "${GREEN}Ejecutando entrenamiento con uv...${NC}"
-uv run python envs/train_car_mlagents.py "$@"
+echo -e "${GREEN}Ejecutando entrenamiento con tu PPO personalizado...${NC}"
+uv run python envs/train_custom_ppo.py "$@"
 

@@ -18,8 +18,9 @@ import os
 import sys
 import argparse
 import subprocess
+import time
 from pathlib import Path
-
+import mlagents
 
 def parse_args():
     """Parse command line arguments."""
@@ -93,18 +94,26 @@ Ejemplos:
         help="Puerto base para comunicación con Unity (default: 5004)"
     )
     
+    parser.add_argument(
+        "--no-graphics",
+        action="store_true",
+        help="Desactivar gráficos (útil para servidores sin display)"
+    )
+    
     return parser.parse_args()
 
 
+
+
+
 def check_mlagents_installed():
-    """Verificar que mlagents está instalado."""
+    """Verificar que ML-Agents está instalado."""
     try:
         import mlagents
-        print(f"✓ ML-Agents instalado (versión: {mlagents.__version__})")
         return True
     except ImportError:
         print("✗ ML-Agents no está instalado.")
-        print("  Instálalo con: pip install mlagents")
+        print("  Instala ML-Agents con: uv sync")
         return False
 
 
@@ -143,6 +152,10 @@ def build_mlagents_command(args):
     if args.base_port != 5004:
         cmd.extend(["--base-port", str(args.base_port)])
     
+    if args.no_graphics:
+        cmd.append("--no-graphics")
+        print("✓ Modo sin gráficos activado")
+    
     return cmd
 
 
@@ -175,16 +188,38 @@ def main():
     
     print()
     print("=" * 70)
+    print("⚠️  IMPORTANTE: Preparación antes de iniciar")
+    print("=" * 70)
+    print()
+    if not args.env:
+        print("Si usas Unity Editor, DEBES hacer lo siguiente ANTES de continuar:")
+        print()
+        print("  1. ✅ Unity Editor debe estar ABIERTO")
+        print("  2. ✅ La escena con CarAgent debe estar CARGADA")
+        print("  3. ✅ El Behavior Parameters del CarAgent debe estar configurado:")
+        print("     - Behavior Name: 'CarAgent' (debe coincidir con el config YAML)")
+        print("     - Behavior Type: 'Default' (NO 'Inference')")
+        print("  4. ⏸️  Unity NO debe estar en Play todavía")
+        print()
+        print("Después de presionar ENTER, tendrás 10 segundos para:")
+        print("  → Presionar PLAY en Unity Editor")
+        print()
+        input("Presiona ENTER cuando estés listo para iniciar el entrenamiento... ")
+        print()
+        print("⏳ Iniciando en 10 segundos... Presiona PLAY en Unity AHORA!")
+        print()
+        for i in range(10, 0, -1):
+            print(f"  {i}...", end='\r', flush=True)
+            time.sleep(1)
+        print("  ¡Iniciando!                                    ")
+        print()
+    
+    print("=" * 70)
     print("Iniciando entrenamiento...")
     print("=" * 70)
     print()
     print("Comando ejecutado:")
     print("  " + " ".join(cmd))
-    print()
-    print("NOTA: Si usas Unity Editor, asegúrate de:")
-    print("  1. Tener Unity abierto con la escena que contiene el CarAgent")
-    print("  2. El comportamiento debe estar en modo 'Training' (no 'Inference')")
-    print("  3. Presionar Play en Unity después de que mlagents-learn se conecte")
     print()
     print("Para ver el progreso en TensorBoard:")
     print(f"  tensorboard --logdir results/{args.run_id}")
@@ -193,18 +228,63 @@ def main():
     print()
     
     # Ejecutar comando
+    # Ejecutamos con capture_output para analizar errores, pero el usuario ya vio el error
     try:
-        subprocess.run(cmd, check=True)
+        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        # Si llegamos aquí, mostrar el output
+        if result.stdout:
+            print(result.stdout)
     except KeyboardInterrupt:
         print("\n\nEntrenamiento interrumpido por el usuario.")
         sys.exit(0)
     except subprocess.CalledProcessError as e:
-        print(f"\n✗ Error durante el entrenamiento: {e}")
+        # Mostrar el output que se capturó
+        if e.stdout:
+            print(e.stdout)
+        if e.stderr:
+            print(e.stderr, file=sys.stderr)
+        
+        # Analizar el error
+        error_text = (e.stderr or "") + (e.stdout or "")
+        
+        print("\n" + "=" * 70)
+        print("Sugerencias para resolver el error:")
+        print("=" * 70)
+        
+        # Detectar diferentes tipos de errores
+        if "Previous data from this run ID was found" in error_text:
+            print(f"\n✗ Error: Se encontraron datos previos para este run ID.")
+            print(f"  Run ID: {args.run_id}")
+            print("\n  Opciones:")
+            print("  1. Continuar entrenamiento existente:")
+            print(f"     ./train_mlagents.sh --resume --run-id {args.run_id}")
+            print("  2. Sobrescribir datos existentes:")
+            print(f"     ./train_mlagents.sh --force --run-id {args.run_id}")
+            print("  3. Usar un nuevo run ID:")
+            print(f"     ./train_mlagents.sh --run-id nuevo_run_id")
+        elif "UnityTimeOutException" in error_text or "took too long to respond" in error_text:
+            print("\n✗ Error: Unity tardó demasiado en responder (timeout).")
+            print("\n  Posibles soluciones:")
+            print("  1. Asegúrate de que Unity Editor esté ejecutándose y la escena esté en Play")
+            print("  2. Verifica que el Behavior Type esté en 'Default' (no 'Inference')")
+            print("  3. Si estás en un servidor sin gráficos, usa:")
+            print(f"     ./train_mlagents.sh --no-graphics")
+            print("  4. Verifica que las versiones de ML-Agents sean compatibles")
+            print("  5. Intenta aumentar el timeout o reiniciar Unity")
+        else:
+            print("\n✗ Error durante el entrenamiento.")
+            print("  Revisa el mensaje de error arriba para más detalles.")
+            print("\n  Comandos útiles:")
+            print(f"  - Continuar: ./train_mlagents.sh --resume --run-id {args.run_id}")
+            print(f"  - Forzar: ./train_mlagents.sh --force --run-id {args.run_id}")
+            print(f"  - Sin gráficos: ./train_mlagents.sh --no-graphics")
+        
+        print()
         sys.exit(1)
     except FileNotFoundError:
         print("\n✗ Comando 'mlagents-learn' no encontrado.")
         print("  Asegúrate de que ML-Agents esté instalado correctamente:")
-        print("  pip install mlagents")
+        print("  uv sync")
         sys.exit(1)
 
 
