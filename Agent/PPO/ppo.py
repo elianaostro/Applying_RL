@@ -194,7 +194,12 @@ class PPOClip(nn.Module):
 
     @staticmethod
     def load(path: str, obs_dim: int, act_dim: int, device: torch.device, discrete: bool = None) -> "PPOClip":
-        ckpt = torch.load(path, map_location=device, weights_only=False)
+        # weights_only fue agregado en PyTorch 2.0+, usar solo si está disponible
+        try:
+            ckpt = torch.load(path, map_location=device, weights_only=False)
+        except TypeError:
+            # Versión antigua de PyTorch que no soporta weights_only
+            ckpt = torch.load(path, map_location=device)
         cfg = PPOConfig(**ckpt["config"])  # type: ignore[arg-type]
         # Use stored discrete flag if available, otherwise use provided parameter
         discrete_flag = ckpt.get("discrete", discrete) if discrete is None else discrete

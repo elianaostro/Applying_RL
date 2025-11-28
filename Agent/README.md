@@ -127,6 +127,45 @@ Los modelos se guardan en `results/custom_ppo/`:
 - `ppo_step_200000.pt`
 - `ppo_final.pt`
 
+### Evaluación del Modelo (Inference)
+
+Para ejecutar Unity con un modelo entrenado sin entrenar (solo ver cómo se comporta):
+
+**Opción A: Con Build de Linux (recomendado)**
+```bash
+cd Agent
+./eval_car_ppo.sh --weights results/custom_ppo/ppo_final.pt --episodes 10
+```
+
+**Opción B: Con Unity Editor**
+```bash
+cd Agent
+./eval_car_ppo.sh --weights results/custom_ppo/ppo_final.pt --env editor --episodes 10
+```
+
+**Opciones disponibles:**
+```bash
+./eval_car_ppo.sh [opciones]
+
+Opciones:
+  --weights PATH      Ruta al archivo de pesos del modelo (.pt) [REQUERIDO]
+  --episodes N       Número de episodios a evaluar (default: 10)
+  --env PATH          Ruta al ejecutable de Unity (opcional)
+                       - Por defecto: usa ../Build/RunCar.x86_64
+                       - Usa 'editor' para Unity Editor
+  --time-scale F      Time scale de Unity (default: 1.0, velocidad normal)
+  --seed N            Seed para reproducibilidad (default: 1)
+```
+
+**Ejemplo:**
+```bash
+# Evaluar el modelo final con 5 episodios
+./eval_car_ppo.sh --weights results/custom_ppo/ppo_final.pt --episodes 5
+
+# Evaluar un checkpoint específico
+./eval_car_ppo.sh --weights results/custom_ppo/ppo_step_4100000.pt --episodes 10
+```
+
 ## 📊 Monitoreo del Entrenamiento
 
 ### TensorBoard
