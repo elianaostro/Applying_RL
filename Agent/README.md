@@ -46,7 +46,7 @@ El prefab `Car` ya incluye todos los componentes necesarios:
   - **Behavior Name**: `CarAgent`
   - **Vector Observation Space Size**: `6` (5 sensores + 1 velocidad)
   - **Action Space Size**: `2` (turn, throttle)
-  - **Action Type**: `Continuous`
+       - **Action Type**: `Continuous`
 - ✅ Escenas configuradas con `TrackManager` y prefabs listos
 
 **No se requiere configuración manual adicional.** Puedes proceder directamente al entrenamiento.

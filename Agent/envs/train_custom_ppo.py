@@ -116,16 +116,17 @@ def main():
     save_dir = Path(args.save_dir)
     save_dir.mkdir(parents=True, exist_ok=True)
     
-    # Configurar TensorBoard
+    # Configurar TensorBoard - usar directamente el directorio sin subdirectorios
     if args.tensorboard_dir is None:
         tensorboard_dir = save_dir / "tensorboard"
     else:
         tensorboard_dir = Path(args.tensorboard_dir)
     
-    # Crear un subdirectorio con timestamp para esta ejecución
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    run_dir = tensorboard_dir / f"run_{timestamp}"
-    writer = SummaryWriter(log_dir=str(run_dir))
+    # Crear el directorio si no existe
+    tensorboard_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Usar directamente el directorio de tensorboard (una sola run)
+    writer = SummaryWriter(log_dir=str(tensorboard_dir))
     
     # Procesar ruta del ejecutable de Unity
     unity_env_path = None
@@ -239,7 +240,7 @@ exec "{build_abs_path}" -batchmode -nographics "$@"
     print(f"  Max Steps: {args.max_steps}")
     print(f"  Time Scale: {args.time_scale}")
     print(f"  Save Dir: {args.save_dir}")
-    print(f"  TensorBoard Dir: {run_dir}")
+    print(f"  TensorBoard Dir: {tensorboard_dir}")
     print(f"  Base Port: {args.base_port}")
     print(f"  Worker ID: {args.worker_id}")
     print()
@@ -325,6 +326,9 @@ exec "{build_abs_path}" -batchmode -nographics "$@"
         # Se guardan aquí antes de obtener el reward del siguiente paso
         pending_transitions = {}  # {agent_id: {'obs': obs, 'action': action, 'logp': logp, 'val': val}}
         
+        # Diccionario para sumar rewards paso a paso: {agent_id: current_episode_score}
+        episode_scores = {}
+        
         print("=" * 70)
         print("Iniciando entrenamiento...")
         print("=" * 70)
@@ -345,7 +349,7 @@ exec "{build_abs_path}" -batchmode -nographics "$@"
             # Aquí recibimos el reward final y guardamos la transición con done=True
             for agent_id in terminal_steps.agent_id:
                 term_step = terminal_steps[agent_id]
-                final_reward = term_step.reward
+                final_step_reward = term_step.reward
                 
                 # Si tenemos una transición pendiente, guardarla con el reward final
                 if agent_id in pending_transitions:
@@ -354,26 +358,31 @@ exec "{build_abs_path}" -batchmode -nographics "$@"
                         obs=trans['obs'],
                         act=trans['action'],
                         logp=trans['logp'],
-                        rew=final_reward,
+                        rew=final_step_reward,
                         done=True,
                         val=trans['val']
                     )
-                    
-                    episode_rewards.append(final_reward)
-                    episode_count += 1
                     total_steps += 1
-                    
-                    # Registrar reward en TensorBoard
-                    writer.add_scalar("Reward/Episode_Reward", final_reward, episode_count)
-                    
                     # Limpiar transición pendiente
                     del pending_transitions[agent_id]
-                    
-                    if episode_count % 10 == 0:
-                        avg_reward = np.mean(episode_rewards[-10:])
-                        print(f"Episodio {episode_count}, Recompensa promedio: {avg_reward:.2f}, Pasos: {total_steps}")
-                        # Registrar promedio de rewards
-                        writer.add_scalar("Reward/Average_Reward_10", avg_reward, episode_count)
+                
+                # Recuperar lo acumulado y sumar el último reward
+                total_episode_reward = episode_scores.get(agent_id, 0.0) + final_step_reward
+                
+                # Limpiar el contador para este agente (ya que renacerá con el mismo ID o uno nuevo)
+                if agent_id in episode_scores:
+                    del episode_scores[agent_id]
+                
+                # AHORA SÍ guardas el total real
+                episode_rewards.append(total_episode_reward)
+                episode_count += 1
+                
+                # Registrar reward en TensorBoard usando total_steps para alinearlo con Loss y Entropy
+                writer.add_scalar("Reward", total_episode_reward, total_steps)
+                
+                if episode_count % 10 == 0:
+                    avg_reward = np.mean(episode_rewards[-10:])
+                    print(f"Episodio {episode_count}, Recompensa promedio: {avg_reward:.2f}, Pasos: {total_steps}")
             
             # 3. Procesar agentes activos que necesitan actuar (Decision Steps)
             if len(decision_steps) > 0:
@@ -424,6 +433,11 @@ exec "{build_abs_path}" -batchmode -nographics "$@"
                     decision_step_next = decision_steps_next[agent_id]
                     step_reward = decision_step_next.reward
                     
+                    # ACUMULAR REWARD
+                    if agent_id not in episode_scores:
+                        episode_scores[agent_id] = 0.0
+                    episode_scores[agent_id] += step_reward
+                    
                     # Ahora tenemos todo: obs, action, logp, reward, val, done=False
                     trans = pending_transitions[agent_id]
                     agent.buffer.add(
@@ -463,17 +477,10 @@ exec "{build_abs_path}" -batchmode -nographics "$@"
                 # Actualizar el agente
                 metrics = agent.update(batch)
                 
-                # Registrar métricas en TensorBoard
-                writer.add_scalar("Loss/Policy_Loss", metrics['loss_policy'], total_steps)
-                writer.add_scalar("Loss/Value_Loss", metrics['loss_value'], total_steps)
-                writer.add_scalar("Loss/Total_Loss", metrics.get('loss_total', metrics['loss_policy'] + metrics['loss_value']), total_steps)
-                writer.add_scalar("Metrics/Entropy", metrics['entropy'], total_steps)
-                
-                # Registrar también por update number
-                update_number = total_steps // config.n_steps
-                writer.add_scalar("Loss/Policy_Loss_Update", metrics['loss_policy'], update_number)
-                writer.add_scalar("Loss/Value_Loss_Update", metrics['loss_value'], update_number)
-                writer.add_scalar("Metrics/Entropy_Update", metrics['entropy'], update_number)
+                # Registrar métricas en TensorBoard (solo Loss y Entropy)
+                total_loss = metrics.get('loss_total', metrics['loss_policy'] + metrics['loss_value'])
+                writer.add_scalar("Loss", total_loss, total_steps)
+                writer.add_scalar("Entropy", metrics['entropy'], total_steps)
                 
                 print(f"Update en paso {total_steps}:")
                 print(f"  Policy Loss: {metrics['loss_policy']:.4f}")
@@ -495,7 +502,7 @@ exec "{build_abs_path}" -batchmode -nographics "$@"
         
         # Cerrar TensorBoard writer
         writer.close()
-        print(f"Logs de TensorBoard guardados en: {run_dir}")
+        print(f"Logs de TensorBoard guardados en: {tensorboard_dir}")
         print(f"\nPara visualizar los resultados, ejecuta:")
         print(f"  tensorboard --logdir {tensorboard_dir}")
         
@@ -507,7 +514,7 @@ exec "{build_abs_path}" -batchmode -nographics "$@"
             print(f"Modelo guardado en: {save_path}")
         if 'writer' in locals():
             writer.close()
-            print(f"Logs de TensorBoard guardados en: {run_dir}")
+            print(f"Logs de TensorBoard guardados en: {tensorboard_dir}")
     except Exception as e:
         error_msg = str(e).lower()
         
