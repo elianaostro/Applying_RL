@@ -129,6 +129,7 @@ def main():
     
     # Procesar ruta del ejecutable de Unity
     unity_env_path = None
+    original_build_path = None
     
     # Si no se especifica --env, usar el build de Linux por defecto
     if args.env is None:
@@ -136,7 +137,8 @@ def main():
         script_dir = Path(__file__).parent.parent
         default_build = script_dir.parent / "Build" / "RunCar.x86_64"
         if default_build.exists():
-            unity_env_path = str(default_build.resolve())
+            original_build_path = default_build.resolve()
+            unity_env_path = str(original_build_path)
             print(f"Usando build de Linux por defecto: {unity_env_path}")
         else:
             print("⚠ Build de Linux no encontrado. Usando Unity Editor.")
@@ -208,7 +210,29 @@ def main():
                 # Si 'file' no está disponible o falla, continuar
                 pass
         
+        original_build_path = env_path
         unity_env_path = str(env_path)
+    
+    # Si --no-graphics está activado y tenemos un ejecutable, crear un wrapper script
+    if args.no_graphics and unity_env_path:
+        # Crear un script wrapper temporal que ejecute Unity con -batchmode -nographics
+        script_dir = Path(__file__).parent.parent
+        wrapper_dir = script_dir / ".tmp"
+        wrapper_dir.mkdir(exist_ok=True)
+        
+        wrapper_script = wrapper_dir / "run_headless.sh"
+        build_abs_path = Path(unity_env_path).resolve()
+        
+        # Crear el script wrapper
+        wrapper_content = f"""#!/bin/bash
+# Wrapper script para ejecutar Unity en modo headless
+exec "{build_abs_path}" -batchmode -nographics "$@"
+"""
+        wrapper_script.write_text(wrapper_content)
+        wrapper_script.chmod(0o755)
+        
+        unity_env_path = str(wrapper_script.resolve())
+        print(f"Modo headless: usando wrapper script para ejecutar sin ventana")
     
     print("Configuración:")
     print(f"  Env: {unity_env_path if unity_env_path else 'Unity Editor'}")
@@ -270,21 +294,28 @@ def main():
         print(f"Usando dispositivo: {device}")
         print()
         
+        # ... dentro de main() en train_custom_ppo.py ...
+
         config = PPOConfig(
-            learning_rate=3e-4,
+            learning_rate=3e-4,      # Estándar y robusto
             gamma=0.99,
             gae_lambda=0.95,
             clip_range=0.2,
-            batch_size=128,
-            n_steps=2048,
-            n_epochs=10,
+            batch_size=512,          # AUMENTADO: De 128 a 512 para estabilizar el gradiente
+            n_steps=4096,            # AUMENTADO: Recolectar más experiencia antes de actualizar
+            n_epochs=5,              # Mantener en 5 para no sobre-ajustar
             hidden_sizes=(256, 256),
-            ent_coef=0.01,
+            ent_coef=0.05,           # CRÍTICO: Subido de 0.0 a 0.05 para forzar exploración
             vf_coef=0.5
         )
         
         agent = PPOClip(obs_dim, act_dim, config, device, discrete=False)
         
+        # IMPORTANTE: Reinicia la desviación estándar para que empiece explorando mucho
+        # Sobrescribimos el log_std inicial de la política
+        with torch.no_grad():
+            agent.policy.log_std.fill_(-0.5) # Valores más altos = más exploración inicial
+            
         # 4. Bucle de Entrenamiento
         total_steps = 0
         episode_count = 0

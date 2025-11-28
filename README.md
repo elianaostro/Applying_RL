@@ -15,7 +15,11 @@ Cars have to navigate through a course without touching the walls or any other o
 <img src="Images/Car.png" width="250">
 
 
-If you would like to tinker with the parameters of the simulation, you can do so in the Unity Editor. If you would simply like to run the simulation with default parameters, you can start the built file [Builds/Applying EANNs.exe](Builds/Applying EANNs.exe).
+If you would like to tinker with the parameters of the simulation, you can do so in the Unity Editor. 
+
+ **Linux**: `Build/RunCar.x86_64` (recomendado para entrenamiento con Reinforcement Learning)
+
+Para entrenar con Reinforcement Learning, ve a la carpeta `Agent/` y sigue las instrucciones en `Agent/README.md`.
 
 
 ## The Neural Network

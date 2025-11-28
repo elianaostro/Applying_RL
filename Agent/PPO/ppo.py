@@ -28,7 +28,8 @@ class GaussianPolicy(nn.Module):
     def __init__(self, obs_dim: int, act_dim: int, hidden: Tuple[int, int] = (128, 128)):
         super().__init__()
         self.mu = MLP(obs_dim, act_dim, hidden)
-        self.log_std = nn.Parameter(torch.zeros(act_dim))
+        # Iniciar con std = 0.5 (log_std ≈ -0.7) reduce el ruido inicial caótico
+        self.log_std = nn.Parameter(torch.ones(act_dim) * -0.7)
 
     def forward(self, obs: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         mu = self.mu(obs)

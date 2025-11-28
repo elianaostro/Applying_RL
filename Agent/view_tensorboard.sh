@@ -7,8 +7,8 @@ YELLOW='\033[1;33m'
 RED='\033[0;31m'
 NC='\033[0m' # No Color
 
-# Obtener el directorio de logs (por defecto results/car_racing_ppo)
-TENSORBOARD_DIR="${1:-results/car_racing_ppo}"
+# Obtener el directorio de logs
+TENSORBOARD_DIR="${1:-results/custom_ppo/tensorboard}"
 
 echo -e "${GREEN}========================================${NC}"
 echo -e "${GREEN}Iniciando TensorBoard${NC}"
@@ -42,6 +42,20 @@ if [ ! -d ".venv" ]; then
     fi
 fi
 
-# Ejecutar TensorBoard (tensorboard ya está en las dependencias)
-uv run tensorboard --logdir "$TENSORBOARD_DIR" --port 6006
+# Ejecutar TensorBoard
+# Primero intentar arreglar el shebang del ejecutable si es necesario
+if [ -f ".venv/bin/tensorboard" ]; then
+    # Verificar y corregir el shebang si apunta a una ruta incorrecta
+    CURRENT_PYTHON="$(pwd)/.venv/bin/python"
+    SHEBANG_LINE=$(head -1 .venv/bin/tensorboard)
+    if [[ "$SHEBANG_LINE" != "#!$CURRENT_PYTHON" ]] && [[ "$SHEBANG_LINE" == "#!"* ]]; then
+        # El shebang apunta a una ruta diferente, corregirlo
+        sed -i "1s|.*|#!$CURRENT_PYTHON|" .venv/bin/tensorboard 2>/dev/null || true
+    fi
+    # Intentar usar el ejecutable
+    .venv/bin/tensorboard --logdir "$TENSORBOARD_DIR" --port 6006
+else
+    # Si no existe el ejecutable, usar python directamente
+    .venv/bin/python -c "import sys; sys.argv = ['tensorboard', '--logdir', '$TENSORBOARD_DIR', '--port', '6006']; from tensorboard import main; main.run_main()"
+fi
 

@@ -49,6 +49,11 @@ public class CarAgent : Unity.MLAgents.Agent
             {
                 float progressReward = (currentCompletion - previousCompletion) * progressRewardMultiplier;
                 AddReward(progressReward);
+                if (carMovement.Velocity > 2.0f)
+                {
+                    // 0.001 puntos por cada frame que vaya rápido
+                    AddReward(0.001f * carMovement.Velocity); 
+                }
                 previousCompletion = currentCompletion;
             }
         }
