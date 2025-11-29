@@ -1,7 +1,5 @@
 import argparse
 import os
-import sys
-from pathlib import Path
 from typing import Tuple
 
 import numpy as np
@@ -9,8 +7,12 @@ import torch
 import gymnasium as gym
 from torch.utils.tensorboard import SummaryWriter
 
+# from PPO.ppo_clip import PPOClip, PPOConfig
+# from ppo_clip.ppo import PPOClip, PPOConfig
+import sys
+from pathlib import Path
 sys.path.append(str(Path(__file__).parent.parent))
-from PPO import PPOClip, PPOConfig
+from PPO.ppo import PPOClip, PPOConfig  
 
 
 def parse_args():
@@ -33,25 +35,8 @@ def make_env(env_name: str, seed: int) -> gym.Env:
         error_str = str(e).lower()
         error_type = str(type(e).__name__)
         
-        # Check for Box2D errors first (most common for BipedalWalker)
-        if "box2d" in error_str or "Box2D" in error_str or ("DependencyNotInstalled" in error_type and "box2d" in error_str):
-            print("\n" + "="*70)
-            print("ERROR: Box2D is required for BipedalWalker but not installed.")
-            print("="*70)
-            print("\nInstallation options:")
-            print("1. Install using pip (recommended):")
-            print("   pip install swig")
-            print("   pip install 'gymnasium[box2d]'")
-            print("\n2. Or install box2d-py directly:")
-            print("   pip install swig")
-            print("   pip install box2d-py")
-            print("\n3. Using conda (alternative):")
-            print("   conda install -c conda-forge box2d-py")
-            print("="*70 + "\n")
-            raise Exception("Box2D is required. Install with: pip install swig && pip install 'gymnasium[box2d]'")
-        
-        # Check for pygame errors
-        elif "pygame" in error_str:
+        # Check for pygame errors first (common with box2d environments)
+        if "pygame" in error_str or "DependencyNotInstalled" in error_type:
             print("\n" + "="*70)
             print("ERROR: pygame is required for BipedalWalker.")
             print("="*70)
@@ -63,17 +48,18 @@ def make_env(env_name: str, seed: int) -> gym.Env:
             print("="*70 + "\n")
             raise Exception("pygame is required. Install with: pip install pygame")
         
-        # Generic dependency error
-        elif "DependencyNotInstalled" in error_type:
+        # Check for box2d errors
+        elif "box2d" in error_str or "Box2D" in error_str:
             print("\n" + "="*70)
-            print("ERROR: A required dependency is not installed.")
+            print("ERROR: Box2D is required for BipedalWalker but not installed.")
             print("="*70)
-            print(f"\nError message: {e}")
-            print("\nPlease check the error message above for installation instructions.")
+            print("\nInstallation options:")
+            print("1. Install via conda (recommended for macOS):")
+            print("   conda install -c conda-forge box2d-py")
+            print("\n2. Install Xcode command line tools first, then try pip:")
+            print("   xcode-select --install")
+            print("   pip install box2d-py")
             print("="*70 + "\n")
-            raise
-        
-        # Re-raise any other exceptions
         raise
 
 
@@ -87,12 +73,17 @@ def main():
     
     # Print TensorBoard information
     logdir_abs = os.path.abspath(args.logdir)
+    # Use relative path for the command (works from project root)
+    # If logdir is relative and doesn't already include envs/, prepend it
+    logdir_rel = args.logdir
+    if not os.path.isabs(logdir_rel) and not logdir_rel.startswith("envs/"):
+        logdir_rel = f"envs/{logdir_rel}"
     print("\n" + "="*70)
     print("TensorBoard Logging")
     print("="*70)
-    print(f"Log directory: {logdir_abs}")
+    print(f"Log directory (absolute): {logdir_abs}")
     print(f"\nTo view training plots, run:")
-    print(f"  tensorboard --logdir {logdir_abs}")
+    print(f"  tensorboard --logdir {logdir_rel}")
     print(f"\nThen open your browser and navigate to:")
     print(f"  http://localhost:6006")
     print(f"\nOr use the full path:")
@@ -187,11 +178,25 @@ def main():
                 writer.add_scalar("rollout/episode_len", episode_len, total_steps)
                 writer.add_scalar("rollout/episode_count", episode_count, total_steps)
                 
+                # Plot reward vs episode (using episode_count as x-axis)
+                writer.add_scalar("episode/reward_vs_episode", episode_return, episode_count)
+                writer.add_scalar("episode/length_vs_episode", episode_len, episode_count)
+                
                 # Track recent returns
                 recent_returns.append(episode_return)
                 if len(recent_returns) > recent_returns_window:
                     recent_returns.pop(0)
                 avg_return = np.mean(recent_returns) if recent_returns else 0.0
+                std_return = np.std(recent_returns) if len(recent_returns) > 1 else 0.0
+                
+                # Log episode-level statistics to TensorBoard
+                writer.add_scalar("episode/avg_return_recent", avg_return, total_steps)
+                writer.add_scalar("episode/std_return_recent", std_return, total_steps)
+                writer.add_scalar("episode/best_return", best_return, total_steps)
+                
+                # Also log vs episode number for better visualization
+                writer.add_scalar("episode/avg_return_recent_vs_episode", avg_return, episode_count)
+                writer.add_scalar("episode/best_return_vs_episode", best_return, episode_count)
                 
                 # Track best return
                 is_best = False
@@ -199,6 +204,7 @@ def main():
                     best_return = episode_return
                     agent.save(os.path.join(args.logdir, "best.pt"))
                     is_best = True
+                    writer.add_scalar("episode/new_best_return", best_return, total_steps)
                 
                 # Check if solved (300+ points)
                 is_solved = episode_return >= SOLVED_THRESHOLD
@@ -220,6 +226,7 @@ def main():
                 
                 # Log solved status to tensorboard
                 writer.add_scalar("rollout/is_solved", 1.0 if is_solved else 0.0, total_steps)
+                writer.add_scalar("episode/is_solved_vs_episode", 1.0 if is_solved else 0.0, episode_count)
                 
                 # Print episode information
                 status = "SOLVED!" if is_solved else ("BEST!" if is_best else "")
@@ -322,7 +329,7 @@ def main():
     print("="*70)
     print(f"Log directory: {logdir_abs}")
     print(f"\nTo view training plots, run:")
-    print(f"  tensorboard --logdir {logdir_abs}")
+    print(f"  tensorboard --logdir {logdir_rel}")
     print(f"\nThen open your browser and navigate to:")
     print(f"  http://localhost:6006")
     print(f"\nOr use the full path:")

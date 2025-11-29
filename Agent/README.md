@@ -111,6 +111,41 @@ Opciones:
   --seed N            Seed para reproducibilidad (default: 1)
 ```
 
+
+### Búsqueda de hiperparámetros con Optuna
+
+Para ajustar el algoritmo automáticamente se puede usar el flujo basado en Optuna:
+
+```bash
+cd Agent
+./train_optuna_ppo.sh \
+     --trials 20 \      
+     --trial-steps 750000 \    
+     --env "../Build/Build2.app" \
+     --time-scale 50.0
+```
+
+Características principales:
+
+- Ejecuta múltiples trials secuenciales conectados al mismo entorno de Unity.
+- Cada trial entrena durante `--trial-steps` pasos y reporta el promedio de recompensa a Optuna para maximizarlo.
+- Los modelos y métricas se guardan en `results/optuna_ppo/` (subcarpetas `trials/`, `best_models/` y `tensorboard/`).
+- Puedes activar `--storage sqlite:///optuna.db` para reanudar búsquedas largas y `--save-top-k` para conservar los mejores checkpoints.
+
+Flags más útiles:
+
+| Flag | Descripción |
+|------|-------------|
+| `--trials` | Número de configuraciones a evaluar (`<=0` = infinito) |
+| `--trial-steps` | Pasos por trial antes de medir la recompensa |
+| `--metric-window` | Episodios promediados para el score |
+| `--report-every` | Frecuencia (en pasos) de los reportes a Optuna/pruner |
+| `--sampler` / `--pruner` | Estrategias de búsqueda (`tpe`/`random`, `median`/`none`) |
+| `--env`, `--no-graphics`, `--time-scale` | Igual que en `train_custom_ppo.py` |
+
+> **Tip:** Después de traer estos cambios corre `uv sync` para instalar la dependencia adicional `optuna`.
+
+
 #### Configuración del algoritmo:
 
 El algoritmo PPO se configura en `envs/train_custom_ppo.py`. Puedes modificar:

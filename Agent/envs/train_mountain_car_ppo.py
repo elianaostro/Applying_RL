@@ -1,8 +1,6 @@
 import argparse
 import os
-import sys
 import time
-from pathlib import Path
 from typing import Tuple
 
 import numpy as np
@@ -10,8 +8,12 @@ import torch
 import gymnasium as gym
 from torch.utils.tensorboard import SummaryWriter
 
+# from PPO.ppo_clip import PPOClip, PPOConfig
+# from ppo_clip.ppo import PPOClip, PPOConfig
+import sys
+from pathlib import Path
 sys.path.append(str(Path(__file__).parent.parent))
-from PPO import PPOClip, PPOConfig
+from PPO.ppo import PPOClip, PPOConfig
 
 
 def parse_args():
@@ -41,12 +43,17 @@ def main():
     
     # Print TensorBoard information
     logdir_abs = os.path.abspath(args.logdir)
+    # Use relative path for the command (works from project root)
+    # If logdir is relative and doesn't already include envs/, prepend it
+    logdir_rel = args.logdir
+    if not os.path.isabs(logdir_rel) and not logdir_rel.startswith("envs/"):
+        logdir_rel = f"envs/{logdir_rel}"
     print("\n" + "="*70)
     print("TensorBoard Logging")
     print("="*70)
-    print(f"Log directory: {logdir_abs}")
+    print(f"Log directory (absolute): {logdir_abs}")
     print(f"\nTo view training plots, run:")
-    print(f"  tensorboard --logdir {logdir_abs}")
+    print(f"  tensorboard --logdir {logdir_rel}")
     print(f"\nThen open your browser and navigate to:")
     print(f"  http://localhost:6006")
     print(f"\nOr use the full path:")
@@ -72,25 +79,12 @@ def main():
     #     n_steps=2048,
     #     hidden_sizes=(64, 64),  # Smaller network for Mountain Car
     # )
-    # cfg = PPOConfig(
-    #     gamma=0.99,
-    #     gae_lambda=0.95,
-    #     clip_range=0.2,
-    #     learning_rate=3e-4,
-    #     ent_coef=0.1,          # un poco más alta para incentivar exploración
-    #     vf_coef=0.5,
-    #     max_grad_norm=0.5,
-    #     n_epochs=4,
-    #     batch_size=64,
-    #     n_steps=512,           # episodios más cortos, más frecuentes
-    #     hidden_sizes=(64, 64),
-    # )
     cfg = PPOConfig(
         gamma=0.99,
         gae_lambda=0.95,
         clip_range=0.2,
-        learning_rate=1e-4,
-        ent_coef=0.05,          # un poco más alta para incentivar exploración
+        learning_rate=3e-4,
+        ent_coef=0.1,          # un poco más alta para incentivar exploración
         vf_coef=0.5,
         max_grad_norm=0.5,
         n_epochs=4,
@@ -98,6 +92,19 @@ def main():
         n_steps=512,           # episodios más cortos, más frecuentes
         hidden_sizes=(64, 64),
     )
+    # cfg = PPOConfig(
+    #     gamma=0.99,
+    #     gae_lambda=0.95,
+    #     clip_range=0.2,
+    #     learning_rate=1e-4,
+    #     ent_coef=0.05,          # un poco más alta para incentivar exploración
+    #     vf_coef=0.5,
+    #     max_grad_norm=0.5,
+    #     n_epochs=4,
+    #     batch_size=64,
+    #     n_steps=512,           # episodios más cortos, más frecuentes
+    #     hidden_sizes=(64, 64),
+    # )
 
 
     # Note: discrete=False for continuous actions
@@ -253,11 +260,25 @@ def main():
                 writer.add_scalar("rollout/episode_len", episode_len, total_steps)
                 writer.add_scalar("rollout/episode_count", episode_count, total_steps)
                 
+                # Plot reward vs episode (using episode_count as x-axis)
+                writer.add_scalar("episode/reward_vs_episode", episode_return, episode_count)
+                writer.add_scalar("episode/length_vs_episode", episode_len, episode_count)
+                
                 # Track recent returns
                 recent_returns.append(episode_return)
                 if len(recent_returns) > recent_returns_window:
                     recent_returns.pop(0)
                 avg_return = np.mean(recent_returns) if recent_returns else 0.0
+                std_return = np.std(recent_returns) if len(recent_returns) > 1 else 0.0
+                
+                # Log episode-level statistics to TensorBoard
+                writer.add_scalar("episode/avg_return_recent", avg_return, total_steps)
+                writer.add_scalar("episode/std_return_recent", std_return, total_steps)
+                writer.add_scalar("episode/best_return", best_return, total_steps)
+                
+                # Also log vs episode number for better visualization
+                writer.add_scalar("episode/avg_return_recent_vs_episode", avg_return, episode_count)
+                writer.add_scalar("episode/best_return_vs_episode", best_return, episode_count)
                 
                 # Track best return
                 is_best = False
@@ -265,6 +286,7 @@ def main():
                     best_return = episode_return
                     agent.save(os.path.join(args.logdir, "best.pt"))
                     is_best = True
+                    writer.add_scalar("episode/new_best_return", best_return, total_steps)
                 
                 # Track solved status (use raw env termination to decide)
                 if is_solved:
@@ -285,6 +307,7 @@ def main():
                 
                 # Log solved status to tensorboard
                 writer.add_scalar("rollout/is_solved", 1.0 if is_solved else 0.0, total_steps)
+                writer.add_scalar("episode/is_solved_vs_episode", 1.0 if is_solved else 0.0, episode_count)
                 
                 # Print episode information
                 status = "SOLVED!" if is_solved else ("BEST!" if is_best else "")

@@ -4,7 +4,11 @@ import numpy as np
 import gymnasium as gym
 
 # from PPO.ppo_clip import PPOClip
-from ppo_clip.ppo import PPOClip
+# from ppo_clip.ppo import PPOClip
+import sys
+from pathlib import Path
+sys.path.append(str(Path(__file__).parent.parent))
+from PPO.ppo import PPOClip  
 
 
 def parse_args():
