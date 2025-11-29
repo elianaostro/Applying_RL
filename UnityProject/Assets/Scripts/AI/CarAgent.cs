@@ -37,7 +37,7 @@ public class CarAgent : Unity.MLAgents.Agent
     
     private float previousCompletion = 0f;
     private float timeSinceLastCheckpoint = 0f;
-    private const float MAX_CHECKPOINT_DELAY = 7f;
+    private const float MAX_CHECKPOINT_DELAY = 10f;
     private uint currentCheckpointIndex = 1;
     
     void Update()
@@ -165,7 +165,6 @@ public class CarAgent : Unity.MLAgents.Agent
         if (timeSinceLastCheckpoint > MAX_CHECKPOINT_DELAY)
         {
             AddReward(timeoutPenalty);
-            EndEpisode();
         }
     }
     

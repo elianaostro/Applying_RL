@@ -37,7 +37,7 @@ def parse_args():
         "--env",
         type=str,
         default=None,
-        help="Ruta al ejecutable de Unity (opcional). Por defecto usa el build de Linux en ../Build/RunCar.x86_64. Usa 'editor' para usar Unity Editor."
+        help="Ruta al ejecutable de Unity (opcional). Por defecto usa el build de Linux en ../Build/Run50CarsTrack1/Run50CarsTrack1.x86_64. Usa 'editor' para usar Unity Editor."
     )
     
     parser.add_argument(
@@ -136,7 +136,7 @@ def main():
     if args.env is None:
         # Buscar el build de Linux por defecto
         script_dir = Path(__file__).parent.parent
-        default_build = script_dir.parent / "Build" / "RunCar.x86_64"
+        default_build = script_dir.parent / "Build" / "Run50CarsTrack1" / "Run50CarsTrack1.x86_64"
         if default_build.exists():
             original_build_path = default_build.resolve()
             unity_env_path = str(original_build_path)
@@ -362,27 +362,28 @@ exec "{build_abs_path}" -batchmode -nographics "$@"
                         done=True,
                         val=trans['val']
                     )
+                    
+                    # Recuperar lo acumulado y sumar el último reward
+                    total_episode_reward = episode_scores.get(agent_id, 0.0) + final_step_reward
+                    
+                    # Limpiar el contador para este agente (ya que renacerá con el mismo ID o uno nuevo)
+                    if agent_id in episode_scores:
+                        del episode_scores[agent_id]
+                    
+                    # AHORA SÍ guardas el total real
+                    episode_rewards.append(total_episode_reward)
+                    episode_count += 1
                     total_steps += 1
+                    
                     # Limpiar transición pendiente
                     del pending_transitions[agent_id]
-                
-                # Recuperar lo acumulado y sumar el último reward
-                total_episode_reward = episode_scores.get(agent_id, 0.0) + final_step_reward
-                
-                # Limpiar el contador para este agente (ya que renacerá con el mismo ID o uno nuevo)
-                if agent_id in episode_scores:
-                    del episode_scores[agent_id]
-                
-                # AHORA SÍ guardas el total real
-                episode_rewards.append(total_episode_reward)
-                episode_count += 1
-                
-                # Registrar reward en TensorBoard usando total_steps para alinearlo con Loss y Entropy
-                writer.add_scalar("Reward", total_episode_reward, total_steps)
-                
-                if episode_count % 10 == 0:
-                    avg_reward = np.mean(episode_rewards[-10:])
-                    print(f"Episodio {episode_count}, Recompensa promedio: {avg_reward:.2f}, Pasos: {total_steps}")
+                    
+                    if episode_count % 10 == 0:
+                        avg_reward = np.mean(episode_rewards[-10:])
+                        print(f"Episodio {episode_count}, Recompensa promedio: {avg_reward:.2f}, Pasos: {total_steps}")
+                    
+                    # Registrar reward en TensorBoard (solo Episode_Reward)
+                    writer.add_scalar("Reward", total_episode_reward, episode_count)
             
             # 3. Procesar agentes activos que necesitan actuar (Decision Steps)
             if len(decision_steps) > 0:

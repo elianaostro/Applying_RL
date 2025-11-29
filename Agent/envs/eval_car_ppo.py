@@ -266,7 +266,10 @@ def main():
                     
                     # Seleccionar acción (modo evaluación, sin entrenar)
                     with torch.no_grad():
-                        action, _, _ = agent.select_action(obs_tensor)
+                        # En lugar de select_action, llamamos directo a la política
+                        # forward devuelve (mu, std). 'mu' es la acción media (sin ruido).
+                        mu, _ = agent.policy(obs_tensor) 
+                        action = mu
                     
                     actions_list.append(action.numpy())
                 
