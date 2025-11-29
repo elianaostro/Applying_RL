@@ -41,7 +41,7 @@ def parse_args():
         "--env",
         type=str,
         default=None,
-        help="Ruta al ejecutable de Unity (opcional). Por defecto usa el build de Linux en ../Build/RunCar.x86_64. Usa 'editor' para usar Unity Editor."
+        help="Ruta al ejecutable de Unity (opcional). Por defecto usa el build de Linux en ../Build/Run50CarsTrack1/Run50CarsTrack1.x86_64. Usa 'editor' para usar Unity Editor."
     )
     
     parser.add_argument(
@@ -111,7 +111,7 @@ def main():
     if args.env is None:
         # Buscar el build de Linux por defecto
         script_dir = Path(__file__).parent.parent
-        default_build = script_dir.parent / "Build" / "RunCar.x86_64"
+        default_build = script_dir.parent / "Build" / "Run50CarsTrack1" / "Run50CarsTrack1.x86_64"
         if default_build.exists():
             unity_env_path = str(default_build.resolve())
             print(f"Usando build de Linux por defecto: {unity_env_path}")

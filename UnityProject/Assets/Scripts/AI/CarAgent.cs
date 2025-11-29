@@ -20,16 +20,23 @@ public class CarAgent : Unity.MLAgents.Agent
     
     [Header("Reward Settings")]
     [SerializeField]
-    private float checkpointReward = 1.0f;
+    private float checkpointReward = 10.0f;
     
     [SerializeField]
     private float wallHitPenalty = -10.0f;
     
     [SerializeField]
     private float timeoutPenalty = -5.0f;
+
+    [SerializeField]
+    private float checkpointDelayPenalty = -1.0f;
     
     [SerializeField]
     private float progressRewardMultiplier = 0.1f;
+
+
+    [SerializeField]
+    private float velocityRewardMultiplier = 0.01f;
     
     [Header("Track Settings")]
     [SerializeField]
@@ -37,7 +44,8 @@ public class CarAgent : Unity.MLAgents.Agent
     
     private float previousCompletion = 0f;
     private float timeSinceLastCheckpoint = 0f;
-    private const float MAX_CHECKPOINT_DELAY = 10f;
+    private const float CHECKPOINT_DELAY_PENALTY = 10f;
+    private const float MAX_CHECKPOINT_DELAY = 50f;
     private uint currentCheckpointIndex = 1;
     
     void Update()
@@ -52,7 +60,7 @@ public class CarAgent : Unity.MLAgents.Agent
                 if (carMovement.Velocity > 2.0f)
                 {
                     // 0.001 puntos por cada frame que vaya rápido
-                    AddReward(0.001f * carMovement.Velocity); 
+                    AddReward(velocityRewardMultiplier * carMovement.Velocity); 
                 }
                 previousCompletion = currentCompletion;
             }
@@ -162,9 +170,14 @@ public class CarAgent : Unity.MLAgents.Agent
         }
         
         timeSinceLastCheckpoint += Time.fixedDeltaTime;
+        if (timeSinceLastCheckpoint > CHECKPOINT_DELAY_PENALTY)
+        {
+            AddReward(checkpointDelayPenalty);
+        }
         if (timeSinceLastCheckpoint > MAX_CHECKPOINT_DELAY)
         {
             AddReward(timeoutPenalty);
+            EndEpisode();
         }
     }
     
