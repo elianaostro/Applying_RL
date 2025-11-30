@@ -19,9 +19,9 @@ from mlagents_envs.base_env import ActionTuple
 from mlagents_envs.environment import UnityEnvironment
 from mlagents_envs.side_channel.engine_configuration_channel import EngineConfigurationChannel
 
-# Permite importar PPOClip / PPOConfig
+
 sys.path.append(str(Path(__file__).parent.parent))
-from PPO.ppo import PPOClip, PPOConfig  # noqa: E402
+from PPO.ppo import PPOClip, PPOConfig  
 
 
 def parse_args() -> argparse.Namespace:
@@ -141,7 +141,7 @@ def detect_default_build(script_dir: Path) -> Optional[Path]:
     elif os.name == "nt":
         candidates.extend(sorted(build_dir.glob("*.exe")))
 
-    # Fallback generales
+    # fallback generales
     fallback = [
         build_dir / "RunCar.x86_64",
         build_dir / "Applying EANNs.exe",
@@ -282,9 +282,11 @@ def config_to_dict(cfg: PPOConfig) -> Dict[str, float]:
         "max_grad_norm": cfg.max_grad_norm,
     }
 
-
 def sample_config(trial: Trial) -> PPOConfig:
-    """Define el espacio de búsqueda para Optuna."""
+    """
+    Define el espacio de búsqueda para Optuna centrado en estabilidad y exploración.
+    """
+    
     hidden_options = [
         (128, 128),
         (256, 256),
@@ -292,20 +294,20 @@ def sample_config(trial: Trial) -> PPOConfig:
         (512, 256),
     ]
     return PPOConfig(
-        learning_rate=trial.suggest_float("learning_rate", 5e-5, 5e-4, log=True),
+        learning_rate=trial.suggest_float("learning_rate", 1e-4, 5e-4, log=True),
         gamma=trial.suggest_float("gamma", 0.98, 0.999),
-        gae_lambda=trial.suggest_float("gae_lambda", 0.9, 0.99),
+        gae_lambda=trial.suggest_float("gae_lambda", 0.92, 0.98),
         clip_range=trial.suggest_float("clip_range", 0.1, 0.3),
-        batch_size=trial.suggest_categorical("batch_size", [128, 256, 512]),
-        n_steps=trial.suggest_categorical("n_steps", [1024, 2048, 4096, 8192]),
+        batch_size=trial.suggest_categorical("batch_size", [512, 1024, 2048]),
+        n_steps=trial.suggest_categorical("n_steps", [2048, 4096, 8192]),
         n_epochs=trial.suggest_int("n_epochs", 3, 10),
         hidden_sizes=trial.suggest_categorical("hidden_sizes", hidden_options),
-        ent_coef=trial.suggest_float("ent_coef", 0.01, 0.05),
-        vf_coef=trial.suggest_float("vf_coef", 0.3, 0.9),
-        max_grad_norm=trial.suggest_float("max_grad_norm", 0.2, 0.7),
+        ent_coef=trial.suggest_float("ent_coef", 0.01, 0.1),
+        vf_coef=trial.suggest_float("vf_coef", 0.4, 0.8),
+        max_grad_norm=trial.suggest_float("max_grad_norm", 0.3, 0.8),
     )
 
-
+    
 def run_single_trial(
     trial: Trial,
     env: UnityEnvironment,
@@ -336,15 +338,12 @@ def run_single_trial(
     metric_window = max(1, args.metric_window)
     report_every = max(1, args.report_every)
     last_report_step = 0
-    
-    # Hack de exploración: número de pasos iniciales con empujón forzado
-    EXPLORATION_HACK_STEPS = 5000
 
     try:
         while total_steps < args.trial_steps:
             decision_steps, terminal_steps = env.get_steps(behavior_name)
 
-            # Procesar episodios que terminaron
+            # procesar episodios que terminaron
             for agent_id in terminal_steps.agent_id:
                 term_step = terminal_steps[agent_id]
                 final_reward = term_step.reward
@@ -361,10 +360,7 @@ def run_single_trial(
                     )
                     total_steps += 1
 
-                # CRÍTICO: Acumular el reward final en episode_scores antes de calcular el total
-                # Esto asegura que se incluya todo el progreso del auto antes de chocar
-                episode_scores[agent_id] = episode_scores.get(agent_id, 0.0) + final_reward
-                total_episode_reward = episode_scores.pop(agent_id, 0.0)
+                total_episode_reward = episode_scores.pop(agent_id, 0.0) + final_reward
                 episode_rewards.append(total_episode_reward)
                 episode_count += 1
                 writer.add_scalar("reward/episode", total_episode_reward, episode_count)
@@ -379,24 +375,13 @@ def run_single_trial(
                         if trial.should_prune():
                             raise TrialPruned()
 
-            # Obtener acciones para agentes activos
+            # obtener acciones para agentes activos
             if len(decision_steps) > 0:
                 actions = []
                 for agent_id in decision_steps.agent_id:
                     obs = decision_steps[agent_id].obs[0]
                     obs_tensor = torch.tensor(obs, dtype=torch.float32)
                     action, logp, val = agent.select_action(obs_tensor)
-                    
-                    # Hack de exploración: empujón inicial para asegurar que el auto se mueva
-                    # En los primeros pasos, forzamos una aceleración mínima positiva
-                    if total_steps < EXPLORATION_HACK_STEPS:
-                        action_np = action.numpy()
-                        # Asegurar que la aceleración (segundo elemento) sea al menos 0.3
-                        # Esto garantiza que el auto avance al principio
-                        if len(action_np) >= 2:
-                            action_np[1] = max(action_np[1], 0.3)
-                        action = torch.tensor(action_np, dtype=torch.float32)
-                    
                     pending_transitions[agent_id] = {
                         "obs": obs,
                         "action": action.numpy(),
@@ -409,12 +394,12 @@ def run_single_trial(
                     action_tuple = ActionTuple(continuous=np.vstack(actions))
                     env.set_actions(behavior_name, action_tuple)
 
-            # Avanza simulación
+            # avanza simulacion
             env.step()
 
             decision_steps_next, _ = env.get_steps(behavior_name)
 
-            # Completar transiciones con reward (done=False)
+            # completar transiciones con reward (done=False)
             for agent_id in decision_steps_next.agent_id:
                 if agent_id in pending_transitions:
                     step_reward = decision_steps_next[agent_id].reward
@@ -430,7 +415,7 @@ def run_single_trial(
                     )
                     total_steps += 1
 
-            # Actualizar política cuando el buffer esté lleno
+            # actualizar politica cuando el buffer este lleno
             if agent.buffer.is_full():
                 if len(decision_steps_next) > 0:
                     last_agent = decision_steps_next.agent_id[0]
@@ -510,6 +495,45 @@ def build_study(args: argparse.Namespace) -> optuna.Study:
     )
 
 
+def save_all_trial_configs(study: optuna.Study, args: argparse.Namespace) -> None:
+    """Guarda las configuraciones de todos los trials completados."""
+    completed_trials = [
+        t for t in study.trials 
+        if t.state == optuna.trial.TrialState.COMPLETE and "config" in t.user_attrs
+    ]
+    if not completed_trials:
+        print("No hay trials completados para guardar configuraciones.")
+        return
+
+    # ordenar por reward (mejor primero)
+    completed_trials.sort(key=lambda t: t.value if t.value is not None else -np.inf, reverse=True)
+    
+    all_configs = []
+    for trial in completed_trials:
+        trial_data = {
+            "trial_number": trial.number,
+            "reward": float(trial.value) if trial.value is not None else None,
+            "state": trial.state.name,
+            "config": trial.user_attrs.get("config", {}),
+            "params": {k: float(v) if isinstance(v, (int, float)) else v for k, v in trial.params.items()},
+            "model_path": trial.user_attrs.get("model_path", ""),
+            "log_dir": trial.user_attrs.get("log_dir", ""),
+        }
+        all_configs.append(trial_data)
+    
+    all_configs_path = Path(args.save_dir) / "all_trials_configs.json"
+    with all_configs_path.open("w", encoding="utf-8") as fh:
+        json.dump(
+            {
+                "total_trials": len(all_configs),
+                "trials": all_configs,
+            },
+            fh,
+            indent=2,
+        )
+    print(f"✓ Configuraciones de {len(all_configs)} trials guardadas en: {all_configs_path}")
+
+
 def save_best_models(study: optuna.Study, args: argparse.Namespace) -> None:
     """Copia los mejores modelos a un subdirectorio dedicado."""
     completed_trials = [
@@ -574,7 +598,7 @@ def main():
         study = build_study(args)
 
         def objective(trial: Trial) -> float:
-            # Directorio único para TensorBoard
+            # directorio unico para tensorboard
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             trial_log_dir = tensorboard_root / f"trial_{trial.number:03d}_{timestamp}"
             trial_log_dir.mkdir(parents=True, exist_ok=True)
@@ -598,6 +622,9 @@ def main():
 
         n_trials = args.trials if args.trials > 0 else None
         study.optimize(objective, n_trials=n_trials, show_progress_bar=True)
+
+        # guardar configuraciones de todos los trials
+        save_all_trial_configs(study, args)
 
         if study.best_trial is not None:
             print("\n===== Resultados Optuna =====")

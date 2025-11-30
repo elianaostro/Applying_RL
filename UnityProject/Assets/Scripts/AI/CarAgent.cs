@@ -20,22 +20,26 @@ public class CarAgent : Unity.MLAgents.Agent
     
     [Header("Reward Settings")]
     [SerializeField]
-    private float checkpointReward = 3.0f;
+    private float checkpointReward = 1.0f;
     
     [SerializeField]
-    private float wallHitPenalty = -10.0f;
+    private float wallHitPenalty = -1.0f;
     
     [SerializeField]
-    private float timeoutPenalty = -10.0f;
+    private float timeoutPenalty = -1.0f;
+
+    [SerializeField] 
+    private float existPenalty = -0.001f;  
 
     [SerializeField]
-    private float checkpointDelayPenalty = -1.0f;
+    private float checkpointDelayPenalty = 0.0f;
     
     [SerializeField]
-    private float progressRewardMultiplier = 0.1f;
+    private float progressRewardMultiplier = 5.0f;
+
 
     [SerializeField]
-    private float velocityRewardMultiplier = 0.1f;
+    private float velocityRewardMultiplier = 0.0f;
     
     [Header("Track Settings")]
     [SerializeField]
@@ -47,20 +51,20 @@ public class CarAgent : Unity.MLAgents.Agent
     private const float MAX_CHECKPOINT_DELAY = 50f;
     private uint currentCheckpointIndex = 1;
     
-    void Update()
+    void FixedUpdate()
     {
         if (trackManager != null && carController != null)
         {
             float currentCompletion = carController.CurrentCompletionReward;
-            if (currentCompletion > previousCompletion)
+            if (currentCompletion > previousCompletion + 0.0001f)
             {
                 float progressReward = (currentCompletion - previousCompletion) * progressRewardMultiplier;
                 AddReward(progressReward);
-                if (carMovement.Velocity > 2.0f)
-                {
-                    // 0.001 puntos por cada frame que vaya rápido
-                    AddReward(velocityRewardMultiplier * carMovement.Velocity); 
-                }
+                // if (carMovement.Velocity > 2.0f)
+                // {
+                //     // 0.001 puntos por cada frame que vaya rapido
+                //     AddReward(velocityRewardMultiplier * carMovement.Velocity); 
+                // }
                 previousCompletion = currentCompletion;
             }
         }
@@ -167,6 +171,8 @@ public class CarAgent : Unity.MLAgents.Agent
         {
             carMovement.SetInputs(new double[] { turn, throttle });
         }
+
+        AddReward(existPenalty);
         
         timeSinceLastCheckpoint += Time.fixedDeltaTime;
         if (timeSinceLastCheckpoint > CHECKPOINT_DELAY_PENALTY)

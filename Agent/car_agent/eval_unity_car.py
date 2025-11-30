@@ -41,7 +41,7 @@ def parse_args():
         "--env",
         type=str,
         default=None,
-        help="Ruta al ejecutable de Unity (opcional). Por defecto usa el build de Linux en ../Build/Run50CarsTrack1.x86_64. Usa 'editor' para usar Unity Editor."
+        help="Ruta al ejecutable de Unity (opcional). Por defecto usa el build de Linux en ../Build/Run50CarsTrack1/Run50CarsTrack1.x86_64. Usa 'editor' para usar Unity Editor."
     )
     
     parser.add_argument(
@@ -111,7 +111,7 @@ def main():
     if args.env is None:
         # Buscar el build de Linux por defecto
         script_dir = Path(__file__).parent.parent
-        default_build = script_dir.parent / "Build" / "Run50CarsTrack1.x86_64"
+        default_build = script_dir.parent / "Build" / "Run50CarsTrack1" / "Run50CarsTrack1.x86_64"
         if default_build.exists():
             unity_env_path = str(default_build.resolve())
             print(f"Usando build de Linux por defecto: {unity_env_path}")
@@ -189,10 +189,10 @@ def main():
         print("✓ Modelo cargado")
         print()
         
-        # Poner el modelo en modo evaluación (no entrenamiento)
+        # Poner el modelo en modo evaluacion (no entrenamiento)
         agent.eval()
         
-        # Estadísticas
+        # Estadisticas
         returns = []
         episode_lengths = []
         episode_rewards = {}  # {agent_id: accumulated_reward}
@@ -264,28 +264,28 @@ def main():
                     # Convertir a tensor
                     obs_tensor = torch.tensor(obs, dtype=torch.float32, device=device)
                     
-                    # Seleccionar acción (modo evaluación, sin entrenar)
+                    # Seleccionar accion (modo evaluacion, sin entrenar)
                     with torch.no_grad():
-                        # En lugar de select_action, llamamos directo a la política
-                        # forward devuelve (mu, std). 'mu' es la acción media (sin ruido).
+                        # En lugar de select_action, llamamos directo a la politica
+                        # forward devuelve (mu, std). 'mu' es la accion media (sin ruido).
                         mu, _ = agent.policy(obs_tensor) 
                         action = mu
                     
                     actions_list.append(action.numpy())
                 
-                # Enviar acciones a Unity
+                # Enviar acciones a unity
                 if actions_list:
                     actions_np = np.vstack(actions_list)
                     action_tuple = ActionTuple(continuous=actions_np)
                     env.set_actions(behavior_name, action_tuple)
             
-            # Avanzar simulación
+            # Avanzar simulacion
             env.step()
         
         # Cerrar entorno
         env.close()
         
-        # Mostrar estadísticas finales
+        # Mostrar estadisticas finales
         print()
         print("=" * 70)
         print("Resultados de Evaluación")

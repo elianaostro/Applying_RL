@@ -1,7 +1,4 @@
-﻿/// Author: Samuel Arzt
-/// Date: March 2017
-
-#region Includes
+﻿#region Includes
 using UnityEngine;
 #endregion
 
@@ -155,6 +152,14 @@ public class CarController : MonoBehaviour
         if (carAgent != null)
         {
             carAgent.OnCheckpointCaptured();
+        }
+    }
+
+    public void FinishLap()
+    {
+        if (carAgent != null)
+        {
+            carAgent.OnTrackCompleted();
         }
     }
     #endregion

@@ -1,7 +1,4 @@
-﻿/// Author: Samuel Arzt
-/// Date: March 2017
-
-#region Includes
+﻿#region Includes
 using System;
 using UnityEngine;
 using System.Collections.Generic;
@@ -282,6 +279,13 @@ public class TrackManager : MonoBehaviour
         if (checkPointDistance <= checkpoints[curCheckpointIndex].CaptureRadius)
         {
             curCheckpointIndex++;
+
+            if (curCheckpointIndex >= checkpoints.Length)
+            {
+                car.FinishLap(); 
+                return 1f;
+            }
+
             car.CheckpointCaptured(); //Inform car that it captured a checkpoint
             return GetCompletePerc(car, ref curCheckpointIndex); //Recursively check next checkpoint
         }
