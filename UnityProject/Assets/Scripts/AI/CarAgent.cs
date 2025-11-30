@@ -20,13 +20,13 @@ public class CarAgent : Unity.MLAgents.Agent
     
     [Header("Reward Settings")]
     [SerializeField]
-    private float checkpointReward = 10.0f;
+    private float checkpointReward = 3.0f;
     
     [SerializeField]
     private float wallHitPenalty = -10.0f;
     
     [SerializeField]
-    private float timeoutPenalty = -5.0f;
+    private float timeoutPenalty = -10.0f;
 
     [SerializeField]
     private float checkpointDelayPenalty = -1.0f;
@@ -34,9 +34,8 @@ public class CarAgent : Unity.MLAgents.Agent
     [SerializeField]
     private float progressRewardMultiplier = 0.1f;
 
-
     [SerializeField]
-    private float velocityRewardMultiplier = 0.01f;
+    private float velocityRewardMultiplier = 0.1f;
     
     [Header("Track Settings")]
     [SerializeField]

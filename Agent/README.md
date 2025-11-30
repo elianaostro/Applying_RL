@@ -68,15 +68,15 @@ Este proyecto usa **tu implementación de PPO** (`PPO/ppo.py`) para entrenar el 
 **Opción A: Con Build de Linux (por defecto, recomendado)**
 ```bash
 cd Agent
-./train_custom_ppo.sh --time-scale 50.0
+./train_unity_car.sh --time-scale 50.0
 ```
 
-El script usa automáticamente el build de Linux (`../Build/RunCar.x86_64`). Puedes ver la simulación en tiempo real.
+El script usa automáticamente el build de Linux (`../Build/Run50CarsTrack1/Run50CarsTrack1.x86_64`). Puedes ver la simulación en tiempo real.
 
 **Opción B: Modo headless (sin ventana, más rápido)**
 ```bash
 cd Agent
-./train_custom_ppo.sh --no-graphics --time-scale 50.0
+./train_unity_car.sh --no-graphics --time-scale 50.0
 ```
 
 Útil para entrenamientos largos donde no necesitas ver la simulación.
@@ -84,7 +84,7 @@ cd Agent
 **Opción C: Con Unity Editor (desarrollo)**
 ```bash
 cd Agent
-./train_custom_ppo.sh --env editor
+./train_unity_car.sh --env editor
 ```
 
 Luego, cuando el script indique, **presiona Play en Unity Editor**.
@@ -92,16 +92,16 @@ Luego, cuando el script indique, **presiona Play en Unity Editor**.
 **Opción D: Especificar build personalizado**
 ```bash
 cd Agent
-./train_custom_ppo.sh --env /ruta/a/tu/build.x86_64 --time-scale 50.0
+./train_unity_car.sh --env /ruta/a/tu/build.x86_64 --time-scale 50.0
 ```
 
 #### Opciones disponibles:
 ```bash
-./train_custom_ppo.sh [opciones]
+./train_unity_car.sh [opciones]
 
 Opciones:
   --env PATH          Ruta al ejecutable de Unity (opcional)
-                       - Por defecto: usa ../Build/RunCar.x86_64
+                       - Por defecto: usa ../Build/Run50CarsTrack1/Run50CarsTrack1.x86_64
                        - Usa 'editor' para Unity Editor
   --no-graphics       Ejecutar en modo headless (sin ventana, más rápido)
   --max-steps N       Número máximo de pasos (default: 5000000)
@@ -118,11 +118,7 @@ Para ajustar el algoritmo automáticamente se puede usar el flujo basado en Optu
 
 ```bash
 cd Agent
-./train_optuna_ppo.sh \
-     --trials 20 \      
-     --trial-steps 750000 \    
-     --env "../Build/Build2.app" \
-     --time-scale 50.0
+./train_optuna_unity.sh --env "../Build/Run50CarsTrack1/Run50CarsTrack1.x86_64" --trials 20 --trial-steps 750000 --time-scale 50.0
 ```
 
 Características principales:
@@ -141,14 +137,14 @@ Flags más útiles:
 | `--metric-window` | Episodios promediados para el score |
 | `--report-every` | Frecuencia (en pasos) de los reportes a Optuna/pruner |
 | `--sampler` / `--pruner` | Estrategias de búsqueda (`tpe`/`random`, `median`/`none`) |
-| `--env`, `--no-graphics`, `--time-scale` | Igual que en `train_custom_ppo.py` |
+| `--env`, `--no-graphics`, `--time-scale` | Igual que en `train_unity_car.py` |
 
 > **Tip:** Después de traer estos cambios corre `uv sync` para instalar la dependencia adicional `optuna`.
 
 
 #### Configuración del algoritmo:
 
-El algoritmo PPO se configura en `envs/train_custom_ppo.py`. Puedes modificar:
+El algoritmo PPO se configura en `envs/train_unity_car.py`. Puedes modificar:
 - Learning rate
 - Batch size
 - Número de pasos antes de actualizar
@@ -169,24 +165,24 @@ Para ejecutar Unity con un modelo entrenado sin entrenar (solo ver cómo se comp
 **Opción A: Con Build de Linux (recomendado)**
 ```bash
 cd Agent
-./eval_car_ppo.sh --weights results/custom_ppo/ppo_final.pt --episodes 10
+./eval_unity_car.sh --weights results/custom_ppo/ppo_final.pt --episodes 10
 ```
 
 **Opción B: Con Unity Editor**
 ```bash
 cd Agent
-./eval_car_ppo.sh --weights results/custom_ppo/ppo_final.pt --env editor --episodes 10
+./eval_unity_car.sh --weights results/custom_ppo/ppo_final.pt --env editor --episodes 10
 ```
 
 **Opciones disponibles:**
 ```bash
-./eval_car_ppo.sh [opciones]
+./eval_unity_car.sh [opciones]
 
 Opciones:
   --weights PATH      Ruta al archivo de pesos del modelo (.pt) [REQUERIDO]
   --episodes N       Número de episodios a evaluar (default: 10)
   --env PATH          Ruta al ejecutable de Unity (opcional)
-                       - Por defecto: usa ../Build/RunCar.x86_64
+                       - Por defecto: usa ../Build/Run50CarsTrack1/Run50CarsTrack1.x86_64
                        - Usa 'editor' para Unity Editor
   --time-scale F      Time scale de Unity (default: 1.0, velocidad normal)
   --seed N            Seed para reproducibilidad (default: 1)
@@ -195,11 +191,144 @@ Opciones:
 **Ejemplo:**
 ```bash
 # Evaluar el modelo final con 5 episodios
-./eval_car_ppo.sh --weights results/custom_ppo/ppo_final.pt --episodes 5
+./eval_unity_car.sh --weights results/custom_ppo/ppo_final.pt --episodes 5
 
 # Evaluar un checkpoint específico
-./eval_car_ppo.sh --weights results/custom_ppo/ppo_step_4100000.pt --episodes 10
+./eval_unity_car.sh --weights results/custom_ppo/ppo_step_4100000.pt --episodes 10
 ```
+
+### Entrenamiento con Entornos de Gymnasium
+
+El proyecto incluye scripts genéricos para entrenar y evaluar agentes PPO en cualquier entorno de Gymnasium.
+
+#### Entrenamiento con PPO Personalizado
+
+**Script genérico**: `envs/train_ppo.py`
+
+Este script acepta cualquier entorno de Gymnasium como argumento y configura automáticamente los hiperparámetros según el entorno.
+
+**Ejemplos de uso:**
+
+```bash
+cd Agent/envs
+
+# Entrenar en CartPole
+python train_ppo.py --env CartPole-v1 --timesteps 100000
+
+# Entrenar en MountainCar Continuous
+python train_ppo.py --env MountainCarContinuous-v0 --timesteps 200000
+
+# Entrenar en BipedalWalker
+python train_ppo.py --env BipedalWalker-v3 --timesteps 2000000
+
+# Entrenar en entornos personalizados
+python train_ppo.py --env RandomObsBinaryRewardEnv --timesteps 10000
+python train_ppo.py --env ConstantRewardEnv --timesteps 10000
+python train_ppo.py --env TwoStepDelayedRewardEnv --timesteps 10000
+```
+
+**Opciones disponibles:**
+```bash
+python train_ppo.py [opciones]
+
+Opciones:
+  --env ENV_NAME       Nombre del entorno (requerido)
+                        - Gymnasium: CartPole-v1, MountainCarContinuous-v0, etc.
+                        - Personalizados: RandomObsBinaryRewardEnv, ConstantRewardEnv, TwoStepDelayedRewardEnv
+  --timesteps N        Número total de pasos de entrenamiento (default: 100000)
+  --logdir PATH        Directorio para logs de TensorBoard (default: runs/{env_name}_ppo)
+  --save_path PATH     Ruta para guardar el modelo final (default: {logdir}/final.pt)
+  --checkpoint_freq N  Frecuencia de guardado de checkpoints en pasos (default: 50000, 0 para desactivar)
+  --seed N             Semilla para reproducibilidad (default: 0)
+  --config PATH        Ruta a archivo JSON con configuración personalizada (opcional)
+```
+
+**Configuración automática:**
+
+El script detecta automáticamente el tipo de entorno y aplica configuraciones optimizadas:
+- **CartPole**: Red pequeña (64x64), entropía baja (0.01)
+- **MountainCar**: Reward shaping, exploración aleatoria inicial, entropía alta (0.1)
+- **BipedalWalker**: Red grande (256x256), configuración estándar
+- **Otros entornos**: Configuración por defecto balanceada
+
+#### Evaluación con PPO Personalizado
+
+**Script genérico**: `envs/eval_ppo.py`
+
+```bash
+cd Agent/envs
+
+# Evaluar modelo entrenado
+python eval_ppo.py --env CartPole-v1 --weights runs/cartpole_v1_ppo/final.pt --episodes 10
+
+# Evaluar con renderizado
+python eval_ppo.py --env MountainCarContinuous-v0 --weights runs/mountain_car_continuous_v0_ppo/final.pt --episodes 5 --render
+```
+
+**Opciones disponibles:**
+```bash
+python eval_ppo.py [opciones]
+
+Opciones:
+  --env ENV_NAME       Nombre del entorno (requerido)
+  --weights PATH       Ruta al archivo .pt con los pesos del modelo (requerido)
+  --episodes N         Número de episodios para evaluar (default: 10)
+  --seed N             Semilla para reproducibilidad (default: 0)
+  --render             Renderizar el entorno (requiere pygame)
+```
+
+#### Entrenamiento con Stable-Baselines3
+
+**Script genérico**: `envs/train_stable.py`
+
+Para comparar resultados con la implementación de referencia de PPO:
+
+```bash
+cd Agent/envs
+
+# Entrenar con Stable-Baselines3
+python train_stable.py --env CartPole-v1 --timesteps 100000
+python train_stable.py --env MountainCarContinuous-v0 --timesteps 200000
+python train_stable.py --env BipedalWalker-v3 --timesteps 2000000
+```
+
+**Opciones disponibles:**
+```bash
+python train_stable.py [opciones]
+
+Opciones:
+  --env ENV_NAME       Nombre del entorno (requerido)
+  --timesteps N        Número total de pasos de entrenamiento (default: 100000)
+  --logdir PATH        Directorio para logs (default: runs/{env_name}_sb3_ppo)
+  --save_path PATH     Ruta para guardar el modelo final (default: {logdir}/final_model)
+  --checkpoint_freq N  Frecuencia de guardado de checkpoints (default: 50000)
+  --seed N             Semilla para reproducibilidad (default: 0)
+```
+
+#### Evaluación con Stable-Baselines3
+
+**Script genérico**: `envs/eval_stable.py`
+
+```bash
+cd Agent/envs
+
+# Evaluar modelo SB3 entrenado
+python eval_stable.py --env CartPole-v1 --weights runs/cartpole_v1_sb3_ppo/final_model.zip --episodes 10
+```
+
+**Opciones disponibles:**
+```bash
+python eval_stable.py [opciones]
+
+Opciones:
+  --env ENV_NAME       Nombre del entorno (requerido)
+  --weights PATH       Ruta al archivo .zip con los pesos del modelo (requerido)
+  --episodes N         Número de episodios para evaluar (default: 10)
+  --seed N             Semilla para reproducibilidad (default: 0)
+  --render             Renderizar el entorno (requiere pygame)
+```
+
+**Nota**: Los modelos de Stable-Baselines3 se guardan como archivos `.zip`, mientras que los modelos del PPO personalizado se guardan como `.pt`.
 
 ## 📊 Monitoreo del Entrenamiento
 
@@ -207,9 +336,16 @@ Opciones:
 
 Para visualizar el progreso del entrenamiento:
 
+**Unity:**
 ```bash
 cd Agent
 tensorboard --logdir results/custom_ppo
+```
+
+**Gymnasium:**
+```bash
+cd Agent/envs
+tensorboard --logdir runs
 ```
 
 Luego abre `http://localhost:6006` en tu navegador.
@@ -384,17 +520,27 @@ uv sync
 
 ```
 Agent/
-├── envs/                    # Scripts de entrenamiento
-│   ├── train_custom_ppo.py  # Entrenamiento con PPO personalizado
-│   └── ...
-├── PPO/                     # Implementación de PPO
-│   ├── ppo.py              # Algoritmo PPO
-│   └── rollout.py          # Rollout buffer
-├── results/                 # Resultados del entrenamiento
-│   └── custom_ppo/         # Resultados de PPO personalizado
-├── train_custom_ppo.sh     # Script para entrenamiento
-├── pyproject.toml          # Dependencias del proyecto
-└── README.md               # Este archivo
+├── envs/                           # Scripts de entrenamiento y evaluación
+│   ├── train_ppo.py                # Entrenamiento genérico PPO (Gymnasium)
+│   ├── eval_ppo.py                 # Evaluación genérico PPO (Gymnasium)
+│   ├── train_stable.py             # Entrenamiento genérico Stable-Baselines3
+│   ├── eval_stable.py               # Evaluación genérico Stable-Baselines3
+│   ├── train_unity_car.py          # Entrenamiento Unity con PPO personalizado
+│   ├── test_envs_basics.py         # Entornos personalizados (ConstantRewardEnv, etc.)
+│   └── runs/                       # Resultados de entrenamiento (Gymnasium)
+├── PPO/                            # Implementación de PPO
+│   ├── ppo.py                      # Algoritmo PPO
+│   └── rollout.py                   # Rollout buffer
+├── results/                        # Resultados del entrenamiento
+│   ├── custom_ppo/                 # Resultados Unity PPO personalizado
+│   └── optuna_ppo/                 # Resultados búsqueda de hiperparámetros
+├── runables/                       # Scripts shell de utilidad
+│   ├── train_unity_car.sh          # Script para entrenamiento Unity
+│   ├── eval_unity_car.sh           # Script para evaluación Unity
+│   ├── train_optuna_unity.sh       # Script para búsqueda de hiperparámetros
+│   └── view_tensorboard.sh         # Script para visualizar TensorBoard
+├── pyproject.toml                   # Dependencias del proyecto
+└── README.md                        # Este archivo
 ```
 
 ## 📝 Notas Importantes

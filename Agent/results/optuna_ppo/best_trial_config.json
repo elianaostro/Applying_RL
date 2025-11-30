@@ -1,0 +1,20 @@
+{
+  "trial_number": 1,
+  "reward": -1.0,
+  "config": {
+    "learning_rate": 9.776854331372622e-05,
+    "gamma": 0.9916252049997252,
+    "gae_lambda": 0.9125544474586837,
+    "clip_range": 0.15842892970704364,
+    "batch_size": 512,
+    "n_steps": 4096,
+    "n_epochs": 7,
+    "hidden_sizes": [
+      512,
+      256
+    ],
+    "ent_coef": 0.042335893924658446,
+    "vf_coef": 0.4827682615040224,
+    "max_grad_norm": 0.24883605700319195
+  }
+}
