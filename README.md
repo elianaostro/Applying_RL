@@ -1,6 +1,6 @@
-# Applying Evolutionary Artificial Neural Networks
+# Applying Reinforcement Learning to Car Navigation
 
-A 2D Unity simulation in which cars learn to navigate themselves through different courses. The cars are steered by a feedforward Neural Network. The weights of the network are trained using a modified genetic algorithm.
+A 2D Unity simulation in which cars learn to navigate themselves through different courses. The cars are steered by a feedforward Neural Network. The weights of the network can be trained using Reinforcement Learning (PPO) via ML-Agents.
 Short demo video of an early version: https://youtu.be/rEDzUT3ymw4
 
 
@@ -15,39 +15,35 @@ Cars have to navigate through a course without touching the walls or any other o
 <img src="Images/Car.png" width="250">
 
 
-If you would like to tinker with the parameters of the simulation, you can do so in the Unity Editor. 
-
- **Linux**: `Build/RunCar.x86_64` (recomendado para entrenamiento con Reinforcement Learning)
-
-Para entrenar con Reinforcement Learning, ve a la carpeta `Agent/` y sigue las instrucciones en `Agent/README.md`.
+If you would like to tinker with the parameters of the simulation, you can do so in the Unity Editor. The simulation can be run directly from the Unity Editor or using the built executables in the [Build/](Build/) directory.
 
 
 ## The Neural Network
 
-The Neural Network used is a standard, fully connected, feedforward Neural Network. It comprises 4 layers: an input layer with 5 neurons, two hidden layers with 4 and 3 neurons respectively and an output layer with 2 neurons.
-The code for the Neural Network can be found at [UnityProject/Assets/Scripts/AI/NeuralNetworks/](UnityProject/Assets/Scripts/AI/NeuralNetworks/).
+The Neural Network used is a standard, fully connected, feedforward Neural Network. For Reinforcement Learning training, the network architecture is defined in the PPO implementation and can be configured through the training scripts. The network receives observations from the car's sensors and outputs actions (engine and turning forces).
 
 
 ## Training the Neural Network
 
-The weights of the Neural Network are trained using an Evolutionary Algorithm known as the Genetic Algorithm.
+The weights of the Neural Network are trained using Reinforcement Learning, specifically Proximal Policy Optimization (PPO). The training is implemented using ML-Agents, which connects the Unity simulation with a Python-based PPO algorithm.
 
-At first there are N randomly initialised cars spawned. The best cars are then selected to be recombined with each other, creating new "offspring" cars. These offspring cars then form a new population of N cars and are 
-also slightly mutated in order to inject some more diversity into the population. The newly created population of cars then tries to navigate the course again and the process of evaluation, selection, recombination and mutation starts again. One complete cycle from the evaluation of one population to the evaluation of the next is called a generation.
+The training infrastructure is located in the [Agent/](Agent/) directory, which contains:
+- A custom PPO implementation in [Agent/PPO/](Agent/PPO/)
+- Training scripts for Unity car agents in [Agent/car_agent/](Agent/car_agent/)
+- Support for hyperparameter optimization using Optuna
+- Scripts for training and evaluation
 
-The generic version of a Genetic Algorithm can be found at [UnityProject/Assets/Scripts/AI/Evolution/GeneticAlgorithm.cs](UnityProject/Assets/Scripts/AI/Evolution/GeneticAlgorithm.cs). This class can be modified in a very easy way, by simply assigning your own methods to the delegate operator methods of the class. Some example code for adapting the Genetic Algorithm to your own needs can be found in the EvolutionManager  [UnityProject/Assets/Scripts/AI/Evolution/EvolutionManager.cs](UnityProject/Assets/Scripts/AI/Evolution/EvolutionManager.cs), which is already able to switch between two differently modified Genetic Algorithms.
+The Unity side of the training uses the `CarAgent` component ([UnityProject/Assets/Scripts/AI/CarAgent.cs](UnityProject/Assets/Scripts/AI/CarAgent.cs)), which implements the ML-Agents interface to collect observations, receive actions, and provide rewards. For detailed information on how to train the agents, see the [Agent/README.md](Agent/README.md) file.
 
 
 ## User Interface
 
-The user interface always displays the data of the current best car. In the top left corner the Neural Network's output (engine and turning) is displayed. Right below the output, the evaluation value is displayed (the evaluation value is equal to the percentage of course completion). In the lower left corner a generation counter is displayed. In the upper right corner the Neural Network of the current best car is displayed. The weights are symbolised by the color and width of the connections between neurons: The wider a connection, the bigger the absolute value of the weight; Green means that the weight is positive, red means that the weight is negative.
-
-The entire UI-code is located at [UnityProject/Assets/Scripts/GUI/](UnityProject/Assets/Scripts/GUI/).
+The user interface displays information about the simulation and the current car's state. The UI code is located at [UnityProject/Assets/Scripts/GUI/](UnityProject/Assets/Scripts/GUI/).
 
 
 ## Courses
 
-There are multiple courses of different difficulties which are all located in different unity scenes and can be found in the folder [UnityProject/Assets/Scenes/Tracks/](UnityProject/Assets/Scenes/Tracks/).
+There are multiple courses of different difficulties which are all located in different unity scenes and can be found in the folder [UnityProject/Assets/Scenes/](UnityProject/Assets/Scenes/).
 
 In order to start the simulation on a specific course, open the Main scene and enter the desired track-name (= scene name) in the Inspector of the GameStateManager object.
 
@@ -60,6 +56,5 @@ In order to start the simulation on a specific course, open the Main scene and e
 
 Feel free to use my code in your personal projects. I would be very interested in any work that originates from this project. I would be more than happy to hear from your impressions and results, so feel free to mail me at arzt.samuel@live.de.
 You can also follow me on twitter: https://twitter.com/SamuelArzt
-
 
 
