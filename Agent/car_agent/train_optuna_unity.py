@@ -143,7 +143,7 @@ def detect_default_build(script_dir: Path) -> Optional[Path]:
 
     # fallback generales
     fallback = [
-        build_dir / "RunCar.x86_64",
+        build_dir / "Run50Cars.x86_64",
         build_dir / "Applying EANNs.exe",
         build_dir / "Build2.app",
     ]

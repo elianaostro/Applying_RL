@@ -26,7 +26,7 @@ fi
 cd "$SCRIPT_DIR"
 
 # Verificar que el venv existe, si no, sincronizar dependencias
-if [ ! -d ".venv" ]; then
+if [ ! -d "../.venv" ]; then
     echo -e "${YELLOW}⚠ Entorno virtual no encontrado${NC}"
     echo -e "${GREEN}Creando entorno virtual y sincronizando dependencias...${NC}"
     uv sync --python 3.10
@@ -38,5 +38,5 @@ fi
 
 # Ejecutar el script de entrenamiento con uv
 echo -e "${GREEN}Ejecutando entrenamiento con tu PPO personalizado...${NC}"
-uv run python ../envs/train_unity_car.py "$@"
+uv run python ../car_agent/train_unity_car.py "$@"
 

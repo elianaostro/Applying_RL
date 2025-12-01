@@ -21,7 +21,7 @@ fi
 
 cd "$SCRIPT_DIR"
 
-if [ ! -d ".venv" ]; then
+if [ ! -d "../.venv" ]; then
     echo -e "${YELLOW}⚠ Entorno virtual no encontrado${NC}"
     echo -e "${GREEN}Creando entorno virtual y sincronizando dependencias...${NC}"
     uv sync --python 3.10
@@ -32,5 +32,5 @@ if [ ! -d ".venv" ]; then
 fi
 
 echo -e "${GREEN}Ejecutando búsqueda con Optuna...${NC}"
-uv run python ../envs/train_optuna_unity.py "$@"
+uv run python ../car_agent/train_optuna_unity.py "$@"
 

@@ -16,4 +16,5 @@ dependencies = [
     "pygame>=2.6.1",
     "swig>=4.4.0",
     "optuna>=3.6.0",
+    "ipykernel>=7.1.0",
 ]

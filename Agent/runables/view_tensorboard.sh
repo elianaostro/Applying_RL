@@ -44,18 +44,18 @@ fi
 
 # Ejecutar TensorBoard
 # Primero intentar arreglar el shebang del ejecutable si es necesario
-if [ -f ".venv/bin/tensorboard" ]; then
+if [ -f "../.venv/bin/tensorboard" ]; then
     # Verificar y corregir el shebang si apunta a una ruta incorrecta
     CURRENT_PYTHON="$(pwd)/.venv/bin/python"
-    SHEBANG_LINE=$(head -1 .venv/bin/tensorboard)
+    SHEBANG_LINE=$(head -1 ../.venv/bin/tensorboard)
     if [[ "$SHEBANG_LINE" != "#!$CURRENT_PYTHON" ]] && [[ "$SHEBANG_LINE" == "#!"* ]]; then
         # El shebang apunta a una ruta diferente, corregirlo
-        sed -i "1s|.*|#!$CURRENT_PYTHON|" .venv/bin/tensorboard 2>/dev/null || true
+        sed -i "1s|.*|#!$CURRENT_PYTHON|" ../.venv/bin/tensorboard 2>/dev/null || true
     fi
     # Intentar usar el ejecutable
-    .venv/bin/tensorboard --logdir "$TENSORBOARD_DIR" --port 6006
+    ../.venv/bin/tensorboard --logdir "$TENSORBOARD_DIR" --port 6006
 else
     # Si no existe el ejecutable, usar python directamente
-    .venv/bin/python -c "import sys; sys.argv = ['tensorboard', '--logdir', '$TENSORBOARD_DIR', '--port', '6006']; from tensorboard import main; main.run_main()"
+    ../.venv/bin/python -c "import sys; sys.argv = ['tensorboard', '--logdir', '$TENSORBOARD_DIR', '--port', '6006']; from tensorboard import main; main.run_main()"
 fi
 

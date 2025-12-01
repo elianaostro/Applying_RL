@@ -26,7 +26,7 @@ fi
 cd "$SCRIPT_DIR"
 
 # Verificar que el venv existe, si no, sincronizar dependencias
-if [ ! -d ".venv" ]; then
+if [ ! -d "../.venv" ]; then
     echo -e "${YELLOW}⚠ Entorno virtual no encontrado${NC}"
     echo -e "${GREEN}Creando entorno virtual y sincronizando dependencias...${NC}"
     uv sync --python 3.10
@@ -38,5 +38,5 @@ fi
 
 # Ejecutar el script de evaluación con uv
 echo -e "${GREEN}Ejecutando evaluación...${NC}"
-uv run python ../envs/eval_unity_car.py "$@"
+uv run python ../car_agent/eval_unity_car.py "$@"
 
