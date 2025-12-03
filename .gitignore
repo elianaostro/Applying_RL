@@ -39,3 +39,6 @@ sysinfo.txt
 # macOS system files
 .DS_Store
 **/.DS_Store
+
+ckpt*
+**/ckpt*
