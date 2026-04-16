@@ -1,60 +1,132 @@
 # Applying Reinforcement Learning to Car Navigation
 
-A 2D Unity simulation in which cars learn to navigate themselves through different courses. The cars are steered by a feedforward Neural Network. The weights of the network can be trained using Reinforcement Learning (PPO) via ML-Agents.
+A 2D Unity simulation where cars learn to navigate through courses using Reinforcement Learning. This project extends [Samuel Arzt's original simulation](https://github.com/ArztSamuel/Applying_EANNs) with a custom PPO (Proximal Policy Optimization) implementation in Python, replacing the original evolutionary approach with modern RL.
+
 Short demo video of an early version: https://youtu.be/rEDzUT3ymw4
 
 
 ![](Images/Demo.gif)
 
 
-## The Simulation
+## Overview
 
-Cars have to navigate through a course without touching the walls or any other obstacles of the course. A car has five front-facing sensors which measure the distance to obstacles in a given direction. The readings of these sensors serve as the input of the car's neural network. Each sensor points into a different direction, covering a front facing range of approximately 90 degrees. The maximum range of a sensor is 10 unity units. The output of the Neural Network then determines the car’s current engine and turning force.
-
+Cars must navigate through a course without hitting walls or obstacles. Each car has five front-facing distance sensors (covering ~90 degrees) and a speed reading, forming a 6-dimensional observation vector. A neural network maps these observations to continuous actions: engine force and turning force.
 
 <img src="Images/Car.png" width="250">
 
 
-If you would like to tinker with the parameters of the simulation, you can do so in the Unity Editor. The simulation can be run directly from the Unity Editor or using the built executables in the [Build/](Build/) directory.
+## Project Structure
+
+```
+Applying_RL/
+├── Agent/                        # Python RL training code
+│   ├── PPO/                      # Custom PPO implementation
+│   │   ├── ppo.py                # PPOClip algorithm (policy + value networks)
+│   │   └── rollout.py            # GAE-based rollout buffer
+│   ├── car_agent/                # Unity car training & evaluation
+│   │   ├── train_unity_car.py    # Train car agent with custom PPO
+│   │   ├── eval_unity_car.py     # Evaluate trained models
+│   │   └── train_optuna_unity.py # Hyperparameter search with Optuna
+│   ├── custom_envs/              # Gymnasium environment scripts
+│   │   ├── custom_env.py         # Custom test environments
+│   │   ├── train_ppo.py          # Train on any Gymnasium env
+│   │   ├── eval_ppo.py           # Evaluate custom PPO models
+│   │   ├── train_stable.py       # Train with Stable-Baselines3 (baseline)
+│   │   └── eval_stable.py        # Evaluate SB3 models
+│   └── runables/                 # Shell scripts for training/eval
+├── UnityProject/                 # Unity simulation source
+│   └── Assets/Scripts/           # C# scripts (CarAgent, CarController, etc.)
+├── Build/                        # Pre-built Unity executables
+└── Images/                       # Demo assets
+```
 
 
-## The Neural Network
+## PPO Implementation
 
-The Neural Network used is a standard, fully connected, feedforward Neural Network. For Reinforcement Learning training, the network architecture is defined in the PPO implementation and can be configured through the training scripts. The network receives observations from the car's sensors and outputs actions (engine and turning forces).
+The custom PPO implementation (`Agent/PPO/`) features:
 
+- **Clipped surrogate objective** with configurable clip range
+- **Generalized Advantage Estimation (GAE)** for variance reduction
+- **Support for both continuous and discrete** action spaces
+- **Gaussian policy** (continuous) and **Categorical policy** (discrete)
+- **Configurable architecture** via `PPOConfig` dataclass
 
-## Training the Neural Network
-
-The weights of the Neural Network are trained using Reinforcement Learning, specifically Proximal Policy Optimization (PPO). The training is implemented using ML-Agents, which connects the Unity simulation with a Python-based PPO algorithm.
-
-The training infrastructure is located in the [Agent/](Agent/) directory, which contains:
-- A custom PPO implementation in [Agent/PPO/](Agent/PPO/)
-- Training scripts for Unity car agents in [Agent/car_agent/](Agent/car_agent/)
-- Support for hyperparameter optimization using Optuna
-- Scripts for training and evaluation
-
-The Unity side of the training uses the `CarAgent` component ([UnityProject/Assets/Scripts/AI/CarAgent.cs](UnityProject/Assets/Scripts/AI/CarAgent.cs)), which implements the ML-Agents interface to collect observations, receive actions, and provide rewards. For detailed information on how to train the agents, see the [Agent/README.md](Agent/README.md) file.
+The agent connects to Unity via the ML-Agents Python Low-Level API, allowing full control over the training loop.
 
 
-## User Interface
+## Quick Start
 
-The user interface displays information about the simulation and the current car's state. The UI code is located at [UnityProject/Assets/Scripts/GUI/](UnityProject/Assets/Scripts/GUI/).
+### Prerequisites
+
+- **Python 3.10** with [uv](https://astral.sh/uv) package manager
+- **Unity Editor** (for development) or use the pre-built executables in `Build/`
+
+### Installation
+
+```bash
+cd Agent
+uv sync
+```
+
+### Training
+
+```bash
+# Train with the Linux build (recommended)
+cd Agent/runables
+./train_unity_car.sh --time-scale 50.0
+
+# Train with Unity Editor
+./train_unity_car.sh --env editor
+
+# Hyperparameter search with Optuna
+./train_optuna_unity.sh --trials 20 --trial-steps 750000 --time-scale 50.0
+```
+
+### Evaluation
+
+```bash
+cd Agent/runables
+./eval_unity_car.sh --weights ../results/custom_ppo/ppo_final.pt --episodes 10
+```
+
+### Monitoring
+
+```bash
+tensorboard --logdir Agent/results/custom_ppo/tensorboard
+# Then open http://localhost:6006
+```
+
+For detailed usage, training options, and troubleshooting, see [Agent/README.md](Agent/README.md).
 
 
-## Courses
+## The Simulation
 
-There are multiple courses of different difficulties which are all located in different unity scenes and can be found in the folder [UnityProject/Assets/Scenes/](UnityProject/Assets/Scenes/).
+The simulation can be run from the Unity Editor or using the built executables in [Build/](Build/). Cars are spawned on a track and must navigate checkpoints while avoiding walls. Rewards come from reaching checkpoints; hitting walls ends the episode.
 
-In order to start the simulation on a specific course, open the Main scene and enter the desired track-name (= scene name) in the Inspector of the GameStateManager object.
+### Courses
 
-
+Multiple courses of increasing difficulty are available as Unity scenes in [UnityProject/Assets/Scenes/](UnityProject/Assets/Scenes/).
 
 ![Two different courses the cars can be trained on.](Images/Courses.png)
 
 
+## Gymnasium Benchmarks
+
+The PPO implementation can also be tested on standard Gymnasium environments for validation:
+
+```bash
+cd Agent/custom_envs
+
+# CartPole
+python train_ppo.py --env CartPole-v1 --timesteps 100000
+
+# Compare with Stable-Baselines3
+python train_stable.py --env CartPole-v1 --timesteps 100000
+```
+
+
 ## License
 
-Feel free to use my code in your personal projects. I would be very interested in any work that originates from this project. I would be more than happy to hear from your impressions and results, so feel free to mail me at arzt.samuel@live.de.
-You can also follow me on twitter: https://twitter.com/SamuelArzt
+This project is based on [Applying EANNs](https://github.com/ArztSamuel/Applying_EANNs) by Samuel Arzt, licensed under the MIT License. The Unity simulation, car physics, and sensor system originate from that project.
 
-
+The RL training infrastructure (custom PPO, Optuna integration, Gymnasium benchmarks) was developed by Eliana Ostro.

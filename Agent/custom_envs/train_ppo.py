@@ -23,57 +23,7 @@ from pathlib import Path
 sys.path.append(str(Path(__file__).parent.parent))
 from PPO.ppo import PPOClip, PPOConfig
 
-# Importar entornos personalizados
-
-from custom_env import ConstantRewardEnv, RandomObsBinaryRewardEnv, TwoStepDelayedRewardEnv
-
-def make_env(env_name: str, seed: int) -> gym.Env:
-    """Create environment - supports both gymnasium environments and custom environments."""
-    # Entornos personalizados
-    if env_name == "ConstantRewardEnv":
-        env = ConstantRewardEnv()
-        env.reset(seed=seed)
-        return env
-    elif env_name == "RandomObsBinaryRewardEnv":
-        env = RandomObsBinaryRewardEnv()
-        env.reset(seed=seed)
-        return env
-    elif env_name == "TwoStepDelayedRewardEnv":
-        env = TwoStepDelayedRewardEnv()
-        env.reset(seed=seed)
-        return env
-
-    # Entornos de Gymnasium
-    try:
-        env = gym.make(env_name)
-        env.reset(seed=seed)
-        return env
-    except Exception as e:
-        error_str = str(e).lower()
-        error_type = str(type(e).__name__)
-        
-        # Manejo de errores comunes
-        if "pygame" in error_str or "DependencyNotInstalled" in error_type:
-            print("\n" + "="*70)
-            print("ERROR: pygame is required for this environment.")
-            print("="*70)
-            print("\nPlease install pygame:")
-            print("   pip install pygame")
-            print("="*70 + "\n")
-            raise Exception("pygame is required. Install with: pip install pygame")
-        
-        if "box2d" in error_str or "Box2D" in error_str:
-            print("\n" + "="*70)
-            print("ERROR: Box2D is required but not installed.")
-            print("="*70)
-            print("\nInstallation options:")
-            print("1. Install via conda (recommended):")
-            print("   conda install -c conda-forge box2d-py")
-            print("2. Install Xcode command line tools first, then try pip:")
-            print("   xcode-select --install")
-            print("   pip install box2d-py")
-            print("="*70 + "\n")
-        raise
+from custom_env import make_env
 
 
 def get_default_config(env_name: str, obs_dim: int, act_dim: int, is_discrete: bool) -> PPOConfig:

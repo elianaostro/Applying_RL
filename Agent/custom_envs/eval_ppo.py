@@ -18,41 +18,7 @@ from pathlib import Path
 sys.path.append(str(Path(__file__).parent.parent))
 from PPO.ppo import PPOClip
 
-from custom_env import ConstantRewardEnv, RandomObsBinaryRewardEnv, TwoStepDelayedRewardEnv
-   
-def make_env(env_name: str, seed: int, render_mode: str = None) -> gym.Env:
-    """Create environment - supports both gymnasium environments and custom environments."""
-    # Entornos personalizados
-    if env_name == "ConstantRewardEnv":
-        env = ConstantRewardEnv()
-        env.reset(seed=seed)
-        return env
-    elif env_name == "RandomObsBinaryRewardEnv":
-        env = RandomObsBinaryRewardEnv()
-        env.reset(seed=seed)
-        return env
-    elif env_name == "TwoStepDelayedRewardEnv":
-        env = TwoStepDelayedRewardEnv()
-        env.reset(seed=seed)
-        return env
-    
-    # Entornos de Gymnasium
-    try:
-        env = gym.make(env_name, render_mode=render_mode)
-        env.reset(seed=seed)
-        return env
-    except Exception as e:
-        error_str = str(e).lower()
-        error_type = str(type(e).__name__)
-        
-        # Manejo de errores comunes
-        if "pygame" in error_str or "DependencyNotInstalled" in error_type:
-            print("Warning: pygame is not installed. Rendering disabled.")
-            print("To enable rendering, install pygame: pip install pygame")
-            env = gym.make(env_name, render_mode=None)
-            env.reset(seed=seed)
-            return env
-        raise
+from custom_env import make_env
 
 
 def parse_args():

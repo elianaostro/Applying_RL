@@ -144,7 +144,7 @@ Flags más útiles:
 
 #### Configuración del algoritmo:
 
-El algoritmo PPO se configura en `envs/train_unity_car.py`. Puedes modificar:
+El algoritmo PPO se configura en `car_agent/train_unity_car.py`. Puedes modificar:
 - Learning rate
 - Batch size
 - Número de pasos antes de actualizar
@@ -203,14 +203,14 @@ El proyecto incluye scripts genéricos para entrenar y evaluar agentes PPO en cu
 
 #### Entrenamiento con PPO Personalizado
 
-**Script genérico**: `envs/train_ppo.py`
+**Script genérico**: `custom_envs/train_ppo.py`
 
 Este script acepta cualquier entorno de Gymnasium como argumento y configura automáticamente los hiperparámetros según el entorno.
 
 **Ejemplos de uso:**
 
 ```bash
-cd Agent/envs
+cd Agent/custom_envs
 
 # Entrenar en CartPole
 python train_ppo.py --env CartPole-v1 --timesteps 100000
@@ -253,10 +253,10 @@ El script detecta automáticamente el tipo de entorno y aplica configuraciones o
 
 #### Evaluación con PPO Personalizado
 
-**Script genérico**: `envs/eval_ppo.py`
+**Script genérico**: `custom_envs/eval_ppo.py`
 
 ```bash
-cd Agent/envs
+cd Agent/custom_envs
 
 # Evaluar modelo entrenado
 python eval_ppo.py --env CartPole-v1 --weights runs/cartpole_v1_ppo/final.pt --episodes 10
@@ -279,12 +279,12 @@ Opciones:
 
 #### Entrenamiento con Stable-Baselines3
 
-**Script genérico**: `envs/train_stable.py`
+**Script genérico**: `custom_envs/train_stable.py`
 
 Para comparar resultados con la implementación de referencia de PPO:
 
 ```bash
-cd Agent/envs
+cd Agent/custom_envs
 
 # Entrenar con Stable-Baselines3
 python train_stable.py --env CartPole-v1 --timesteps 100000
@@ -307,10 +307,10 @@ Opciones:
 
 #### Evaluación con Stable-Baselines3
 
-**Script genérico**: `envs/eval_stable.py`
+**Script genérico**: `custom_envs/eval_stable.py`
 
 ```bash
-cd Agent/envs
+cd Agent/custom_envs
 
 # Evaluar modelo SB3 entrenado
 python eval_stable.py --env CartPole-v1 --weights runs/cartpole_v1_sb3_ppo/final_model.zip --episodes 10
@@ -344,7 +344,7 @@ tensorboard --logdir results/custom_ppo
 
 **Gymnasium:**
 ```bash
-cd Agent/envs
+cd Agent/custom_envs
 tensorboard --logdir runs
 ```
 
@@ -520,18 +520,21 @@ uv sync
 
 ```
 Agent/
-├── envs/                           # Scripts de entrenamiento y evaluación
+├── car_agent/                      # Scripts de entrenamiento Unity
+│   ├── train_unity_car.py          # Entrenamiento Unity con PPO personalizado
+│   ├── eval_unity_car.py           # Evaluación de modelos en Unity
+│   └── train_optuna_unity.py       # Búsqueda de hiperparámetros con Optuna
+├── custom_envs/                    # Scripts de entrenamiento Gymnasium
+│   ├── custom_env.py               # Entornos personalizados (ConstantRewardEnv, etc.)
 │   ├── train_ppo.py                # Entrenamiento genérico PPO (Gymnasium)
 │   ├── eval_ppo.py                 # Evaluación genérico PPO (Gymnasium)
 │   ├── train_stable.py             # Entrenamiento genérico Stable-Baselines3
-│   ├── eval_stable.py               # Evaluación genérico Stable-Baselines3
-│   ├── train_unity_car.py          # Entrenamiento Unity con PPO personalizado
-│   ├── test_envs_basics.py         # Entornos personalizados (ConstantRewardEnv, etc.)
+│   ├── eval_stable.py              # Evaluación genérico Stable-Baselines3
 │   └── runs/                       # Resultados de entrenamiento (Gymnasium)
 ├── PPO/                            # Implementación de PPO
 │   ├── ppo.py                      # Algoritmo PPO
-│   └── rollout.py                   # Rollout buffer
-├── results/                        # Resultados del entrenamiento
+│   └── rollout.py                  # Rollout buffer
+├── results/                        # Resultados del entrenamiento Unity
 │   ├── custom_ppo/                 # Resultados Unity PPO personalizado
 │   └── optuna_ppo/                 # Resultados búsqueda de hiperparámetros
 ├── runables/                       # Scripts shell de utilidad
@@ -539,8 +542,8 @@ Agent/
 │   ├── eval_unity_car.sh           # Script para evaluación Unity
 │   ├── train_optuna_unity.sh       # Script para búsqueda de hiperparámetros
 │   └── view_tensorboard.sh         # Script para visualizar TensorBoard
-├── pyproject.toml                   # Dependencias del proyecto
-└── README.md                        # Este archivo
+├── pyproject.toml                  # Dependencias del proyecto
+└── README.md                       # Este archivo
 ```
 
 ## 📝 Notas Importantes

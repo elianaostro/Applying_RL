@@ -3,9 +3,42 @@ from gymnasium import spaces
 import numpy as np
 
 
+CUSTOM_ENVS = {}  # populated after class definitions
+
+
+def make_env(env_name: str, seed: int, render_mode: str = None) -> gym.Env:
+    """Create environment - supports both Gymnasium and custom environments."""
+    if env_name in CUSTOM_ENVS:
+        env = CUSTOM_ENVS[env_name]()
+        env.reset(seed=seed)
+        return env
+
+    try:
+        kwargs = {"render_mode": render_mode} if render_mode else {}
+        env = gym.make(env_name, **kwargs)
+        env.reset(seed=seed)
+        return env
+    except Exception as e:
+        error_str = str(e).lower()
+        error_type = type(e).__name__
+
+        if "pygame" in error_str or "DependencyNotInstalled" in error_type:
+            if render_mode:
+                print("Warning: pygame not installed. Rendering disabled.")
+                env = gym.make(env_name, render_mode=None)
+                env.reset(seed=seed)
+                return env
+            raise Exception("pygame is required. Install with: pip install pygame")
+
+        if "box2d" in error_str or "Box2D" in error_str:
+            print("ERROR: Box2D is required but not installed.")
+            print("Install via: conda install -c conda-forge box2d-py")
+        raise
+
+
 class ConstantRewardEnv(gym.Env):
     def __init__(self):
-        """Initialize ConstanRewardEnv"""
+        """Initialize ConstantRewardEnv"""
         super().__init__()
         self.observation_space = spaces.Discrete(1) # 0 constant observation
         self.action_space = spaces.Discrete(1)  # 1 action: 0 (reward = 1)
@@ -14,14 +47,14 @@ class ConstantRewardEnv(gym.Env):
         self.obs = 0
 
     def reset(self, seed=None, options=None):
-        """Reset ConstanRewardEnv"""
+        """Reset ConstantRewardEnv"""
         super().reset(seed=seed)
         self.done = False
         info = {}
         return self.obs, info
 
     def step(self, action):
-        """Step ConstanRewardEnv"""
+        """Step ConstantRewardEnv"""
         assert self.action_space.contains(action), "Acción inválida"
         
         if self.done:
@@ -37,15 +70,15 @@ class ConstantRewardEnv(gym.Env):
         return self.obs, reward, terminated, truncated, info
     
     def render(self):
-        """Render ConstanRewardEnv"""
-        print("Entorno ConstanRewardEnv (observación siempre = 0)")
+        """Render ConstantRewardEnv"""
+        print("Entorno ConstantRewardEnv (observación siempre = 0)")
 
 
 class RandomObsBinaryRewardEnv(gym.Env):
     def __init__(self):
         """Initialize RandomObsBinaryRewardEnv"""
         super().__init__()
-        self.observation_space = spaces.Discrete(2) # -1 or 1
+        self.observation_space = spaces.Box(low=-1, high=1, shape=(1,), dtype=np.int64)
         self.action_space = spaces.Discrete(1)  # 1 action
 
         self.done = False
@@ -128,3 +161,11 @@ class TwoStepDelayedRewardEnv(gym.Env):
     def render(self):
         """Render TwoStepDelayedRewardEnv"""
         print(f"Step: {self.step_count}, Obs: {self.obs}, Done: {self.done}")
+
+
+# Register custom environments for make_env lookup
+CUSTOM_ENVS.update({
+    "ConstantRewardEnv": ConstantRewardEnv,
+    "RandomObsBinaryRewardEnv": RandomObsBinaryRewardEnv,
+    "TwoStepDelayedRewardEnv": TwoStepDelayedRewardEnv,
+})
